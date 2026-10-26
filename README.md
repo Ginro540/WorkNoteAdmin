@@ -29,7 +29,7 @@ cd web
 npm install
 npm run dev        # http://localhost:5173
 npm test           # 計算ロジックのテスト（Swift 版と同じ結果になるか）
-npm run build      # dist/ に出力
+npm run build      # firebase/hosting/ に出力
 ```
 
 ### 計算が従業員アプリとずれていないかの確認

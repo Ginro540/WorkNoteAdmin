@@ -1,6 +1,7 @@
 # Web
 web/node_modules/
 web/dist/
+firebase/hosting/
 firebase/rules-test/node_modules/
 
 # Xcode
