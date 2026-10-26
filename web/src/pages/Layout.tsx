@@ -20,10 +20,12 @@ import {
 } from '@tabler/icons-react'
 import { signOut } from 'firebase/auth'
 import { collection, query, where } from 'firebase/firestore'
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { auth, db } from '../firebase'
 import { useData } from '../data/session'
 import { useQuery } from '../data/firestore'
+import { Loading } from '../ui/common'
+import { preloadPages } from './lazyPages'
 
 /** 承認待ちの件数（メニューとホームで使う） */
 export function usePendingCounts() {
@@ -48,6 +50,11 @@ export function Layout() {
   const counts = usePendingCounts()
   const location = useLocation()
   useEffect(close, [location.pathname, close])
+  // 開いた画面が表示されたあとで、残りの画面を裏で読み込んでおく
+  useEffect(() => {
+    const timer = setTimeout(preloadPages, 3000)
+    return () => clearTimeout(timer)
+  }, [])
 
   const item = (to: string, label: string, icon: React.ReactNode, right?: React.ReactNode, end = false) => (
     <NavLink component={RouterLink} to={to} end={end} label={label} leftSection={icon} rightSection={right} />
@@ -108,7 +115,9 @@ export function Layout() {
       </AppShell.Navbar>
       <AppShell.Main h="100dvh" style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <Outlet />
+          <Suspense fallback={<Loading />}>
+            <Outlet />
+          </Suspense>
         </div>
       </AppShell.Main>
     </AppShell>

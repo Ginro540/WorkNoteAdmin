@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ActionIcon, Alert, Badge, Button, Card, Chip, Drawer, Group, Menu, Modal, NumberInput, SegmentedControl, Stack, Table, Text, TextInput, Textarea } from '@mantine/core'
 import { IconDots } from '@tabler/icons-react'
@@ -22,7 +22,11 @@ import {
 import { dayStatusLabel, punchKindLabel, type PunchKind } from '../core/attendance'
 import { dateFromDayKey, dateTimeLabel, dayKey, durationLabel, jstParts, makeDate, monthLabel, shortDayLabelFromKey, timeLabel, weekday } from '../core/workCalendar'
 import { Empty, Field, Loading, MonthSelect, PageTitle, PendingBadge, StatusBadge, UserSelect, runWrite } from '../ui/common'
-import { LeaveBadge, RegisterLeaveModal } from './LeavesPage'
+import { LeaveBadge } from '../ui/leaves'
+import 'leaflet/dist/leaflet.css'
+
+// カレンダー（@mantine/dates）は休暇を登録するときだけ読み込む
+const RegisterLeaveModal = lazy(() => import('./RegisterLeaveModal'))
 import { leaveKindLabel, leaveStatusLabel } from '../data/models'
 
 type FlagFilter = 'all' | 'missingPunch' | 'corrected' | 'clockSkew' | 'noLocation' | 'pendingCorrection'
@@ -267,7 +271,11 @@ function DayDetail({ userId, workDate, row, report }: { userId: string; workDate
           </Text>
         </Alert>
       ))}
-      <RegisterLeaveModal opened={registeringLeave} onClose={() => setRegisteringLeave(false)} userId={userId} date={workDate} />
+      {registeringLeave && (
+        <Suspense>
+          <RegisterLeaveModal opened onClose={() => setRegisteringLeave(false)} userId={userId} date={workDate} />
+        </Suspense>
+      )}
 
       {punches.length === 0 ? (
         <Text c="dimmed" size="sm">

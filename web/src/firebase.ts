@@ -1,7 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { connectAuthEmulator, getAuth, type Auth } from 'firebase/auth'
 import { connectFirestoreEmulator, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
 
 /** npm run dev:emulator のとき：パソコンの中のエミュレーターにつなぐ（本番のデータには触れない） */
 export const usesEmulator = import.meta.env.VITE_EMULATOR === '1'
@@ -34,4 +33,8 @@ export const db = initializeFirestore(app, {
 })
 if (usesEmulator) connectFirestoreEmulator(db, '127.0.0.1', 8080)
 
-export const storage = getStorage(app)
+/** Cloud Storage は画像を見るときだけ読み込む（画像の送信を「しない」の間は読み込まない） */
+export async function getStorageModule() {
+  const m = await import('firebase/storage')
+  return { ...m, storage: m.getStorage(app) }
+}

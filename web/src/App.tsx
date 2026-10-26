@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Button, Center, Loader, Paper, Stack, Text, Title } from '@mantine/core'
 import { signOut } from 'firebase/auth'
@@ -6,22 +7,24 @@ import { AdminDataProvider, AuthProvider, useAuth } from './data/session'
 import { LoginPage } from './pages/LoginPage'
 import { Layout } from './pages/Layout'
 import { HomePage } from './pages/HomePage'
-import { ReportsPage } from './pages/ReportsPage'
-import { ExpensesPage } from './pages/ExpensesPage'
-import { CorrectionsPage } from './pages/CorrectionsPage'
-import { AttendancePage } from './pages/AttendancePage'
-import { AttendanceUserPage } from './pages/AttendanceUserPage'
-import { NowPage } from './pages/NowPage'
-import { LeavesPage } from './pages/LeavesPage'
-import { EstimatesPage } from './pages/EstimatesPage'
-import { EstimatePrintPage } from './pages/EstimatePrintPage'
-import { UsersPage } from './pages/master/UsersPage'
-import { SitesPage } from './pages/master/SitesPage'
-import { HolidaysPage } from './pages/master/HolidaysPage'
-import { ReportFieldsPage } from './pages/master/ReportFieldsPage'
-import { CategoriesPage } from './pages/master/CategoriesPage'
-import { CompanyPage } from './pages/master/CompanyPage'
-import { IssuerPage } from './pages/master/IssuerPage'
+import {
+  AttendancePage,
+  AttendanceUserPage,
+  CategoriesPage,
+  CompanyPage,
+  CorrectionsPage,
+  EstimatePrintPage,
+  EstimatesPage,
+  ExpensesPage,
+  HolidaysPage,
+  IssuerPage,
+  LeavesPage,
+  NowPage,
+  ReportFieldsPage,
+  ReportsPage,
+  SitesPage,
+  UsersPage,
+} from './pages/lazyPages'
 
 export function App() {
   return (
@@ -63,7 +66,14 @@ function Gate() {
   return (
     <AdminDataProvider me={profile}>
       <Routes>
-        <Route path="/estimates/:id/print" element={<EstimatePrintPage />} />
+        <Route
+          path="/estimates/:id/print"
+          element={
+            <Suspense fallback={<Center h="100%"><Loader /></Center>}>
+              <EstimatePrintPage />
+            </Suspense>
+          }
+        />
         <Route element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="now" element={<NowPage />} />

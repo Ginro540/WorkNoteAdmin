@@ -7,7 +7,7 @@ import { locationLabel, reportStatusLabel } from '../data/models'
 import { punchKindLabel } from '../core/attendance'
 import { durationLabel, shortDayLabelFromKey, timeLabel } from '../core/workCalendar'
 import { Loading, PageTitle, errorMessage } from '../ui/common'
-import { LeaveBadge } from './LeavesPage'
+import { LeaveBadge } from '../ui/leaves'
 
 const order: NowStatus[] = ['working', 'overnight', 'missingPunch', 'finished', 'notYet', 'leave', 'dayOff']
 

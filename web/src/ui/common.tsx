@@ -4,8 +4,7 @@ import { Anchor, Badge, Button, Group, Loader, Modal, Select, Stack, Text, Texta
 import { notifications } from '@mantine/notifications'
 import { IconChevronLeft } from '@tabler/icons-react'
 import { FirebaseError } from 'firebase/app'
-import { getDownloadURL, ref } from 'firebase/storage'
-import { storage } from '../firebase'
+import { getStorageModule } from '../firebase'
 import { useData } from '../data/session'
 import { monthLabel, shiftMonthKey } from '../core/workCalendar'
 import { statusColor } from './theme'
@@ -167,7 +166,9 @@ export function StoredImage({ path, alt }: { path: string; alt: string }) {
     if (!company.imageUploadEnabled) return
     let cancelled = false
     setFailed(false)
-    getDownloadURL(ref(storage, path)).then(
+    getStorageModule()
+      .then(({ getDownloadURL, ref, storage }) => getDownloadURL(ref(storage, path)))
+      .then(
       (u) => !cancelled && setUrl(u),
       () => !cancelled && setFailed(true),
     )
