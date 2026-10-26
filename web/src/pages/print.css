@@ -1,0 +1,58 @@
+/* 見積書（A4 縦）。画面では紙のように表示し、印刷では紙いっぱいに出す */
+@page { size: A4 portrait; margin: 14mm 14mm 16mm; }
+
+.print-root { background: #e9ecef; min-height: 100%; padding-bottom: 32px; }
+.print-toolbar { position: sticky; top: 0; z-index: 2; background: var(--mantine-color-body); border-bottom: 1px solid var(--mantine-color-default-border); }
+
+.sheet {
+  width: 210mm; min-height: 297mm; margin: 24px auto; padding: 14mm; background: #fff; color: #111;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .15); box-sizing: border-box;
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif; font-size: 10.5pt; line-height: 1.6;
+}
+@media (max-width: 860px) {
+  .sheet { width: auto; min-height: 0; margin: 12px; padding: 18px; }
+}
+
+.est-head { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #111; padding-bottom: 6px; }
+.est-head h1 { margin: 0; font-size: 22pt; letter-spacing: .3em; font-weight: 600; }
+.est-meta { text-align: right; font-size: 9.5pt; }
+
+.est-top { display: flex; justify-content: space-between; gap: 10mm; margin-top: 8mm; }
+.est-client { flex: 1.3; }
+.est-client-name { font-size: 15pt; border-bottom: 1px solid #111; padding-bottom: 2px; }
+.est-client-name span { font-size: 12pt; }
+.est-lead { margin: 4mm 0 2mm; font-size: 9.5pt; }
+.est-info { border-collapse: collapse; width: 100%; font-size: 10pt; }
+.est-info th { text-align: left; font-weight: normal; width: 22mm; padding: 2px 0; vertical-align: top; color: #444; }
+.est-info td { padding: 2px 0; border-bottom: 1px dotted #999; }
+.est-info .sub { font-size: 9pt; color: #444; }
+.est-issuer { flex: 1; font-size: 9.5pt; line-height: 1.55; padding-top: 2mm; }
+.est-issuer-name { font-size: 12.5pt; font-weight: 600; margin-bottom: 2px; }
+.est-staff { margin-top: 3px; }
+
+.est-total { display: flex; align-items: baseline; gap: 6mm; margin: 8mm 0 6mm; padding: 3mm 5mm; border: 1.5px solid #111; width: fit-content; min-width: 110mm; }
+.est-total strong { font-size: 19pt; font-family: "Hiragino Sans", "Yu Gothic", sans-serif; font-variant-numeric: tabular-nums; }
+.est-total .tax { font-size: 9.5pt; }
+
+.est-items { width: 100%; border-collapse: collapse; font-size: 10pt; }
+.est-items th, .est-items td { border: 1px solid #555; padding: 4px 6px; }
+.est-items thead th { background: #f1f3f5; font-weight: 600; text-align: center; }
+.est-items td.qty, .est-items td.price, .est-items td.amount { text-align: right; font-family: "Hiragino Sans", "Yu Gothic", sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.est-items td.unit { text-align: center; white-space: nowrap; }
+.est-items th.qty { width: 16mm; } .est-items th.unit { width: 14mm; } .est-items th.price { width: 26mm; } .est-items th.amount { width: 30mm; }
+.est-items tr.blank td { height: 1.6em; }
+.est-items tfoot th { text-align: right; font-weight: normal; background: #f8f9fa; white-space: nowrap; }
+.est-items tfoot td.foot-space { border: none; }
+.est-items tfoot tr.grand th, .est-items tfoot tr.grand td { font-weight: 700; }
+
+.est-notes { margin-top: 6mm; border: 1px solid #555; padding: 3mm 4mm; min-height: 22mm; font-size: 9.5pt; }
+.est-notes .label { font-weight: 600; margin-bottom: 2px; }
+.sheet .pre { white-space: pre-wrap; }
+
+@media print {
+  html, body, #root { height: auto; background: #fff; }
+  .print-root { background: #fff; padding: 0; }
+  .print-toolbar { display: none !important; }
+  .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+  .est-items tr { break-inside: avoid; }
+}

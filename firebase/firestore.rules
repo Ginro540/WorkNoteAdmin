@@ -1,0 +1,289 @@
+rules_version = '2';
+
+// ワークノート Firestore セキュリティルール（従業員アプリ・管理者アプリ共通。正本は WorkNoteAdmin/firebase）
+// - 従業員は userId が自分のデータだけを読み書きできる
+// - 管理者（users/{uid}.role == 'admin'）は全員分を読める
+// - settings と sites は全員が読めて、管理者だけが変更できる
+// - 「管理者アプリ」と書いた allow は管理者の書き込み（承認・差し戻し・打刻の修正・従業員の登録・見積書）。
+//   従業員の allow はそのまま残し、管理者の条件を別の allow として足している
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    // 作成時：userId が自分で、指定したフィールドだけ
+    function createsOwn() {
+      return isOwner(request.resource.data.userId);
+    }
+
+    // 更新時：userId を変えていない
+    function keepsOwner() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // ユーザー
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      // アカウントは会社が発行する（アプリからは作れない）。自分の role・email は変更できない
+      allow update: if isOwner(uid) && !changedKeys().hasAny(['role', 'email', 'createdAt']);
+      allow create, delete: if false;
+
+      // 管理者アプリ：従業員の登録（アカウントは管理者アプリが Authentication で作る）
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['displayName', 'email', 'role', 'createdAt'])
+        && request.resource.data.displayName is string
+        && request.resource.data.email is string
+        && request.resource.data.role in ['employee', 'admin']
+        && request.resource.data.createdAt == request.time;
+
+      // 管理者アプリ：名前と権限の変更。自分の権限は変えられない（管理者がいなくなるのを防ぐ）
+      allow update: if isAdmin()
+        && changedKeys().hasOnly(['displayName', 'role'])
+        && request.resource.data.displayName is string
+        && request.resource.data.role in ['employee', 'admin']
+        && (uid != request.auth.uid || !changedKeys().hasAny(['role']));
+    }
+
+    // 打刻：本人は追加だけ。時刻は変更・削除できない（あとから位置を追加することだけはできる）
+    match /attendancePunches/{punchId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+
+      allow create: if createsOwn()
+        && request.resource.data.kind in ['in', 'out']
+        && request.resource.data.punchedAt is timestamp
+        && request.resource.data.receivedAt == request.time
+        && request.resource.data.corrected == false
+        && request.resource.data.locationStatus in ['pending', 'acquired', 'unavailable', 'denied']
+        && request.resource.data.workDate is string
+        && request.resource.data.month is string;
+
+      allow update: if isOwner(resource.data.userId)
+        && changedKeys().hasOnly(['location', 'locationStatus'])
+        && (
+          // 取得中の打刻に位置を追加する／取得できなかった・許可されなかったことを記録する
+          (resource.data.locationStatus == 'pending'
+            && request.resource.data.locationStatus in ['acquired', 'unavailable', 'denied'])
+          // 取得済みの位置に住所だけを追加する（緯度・経度は変えない）
+          || (resource.data.locationStatus == 'acquired'
+            && request.resource.data.locationStatus == 'acquired'
+            && request.resource.data.location.lat == resource.data.location.lat
+            && request.resource.data.location.lng == resource.data.location.lng
+            && request.resource.data.location.locatedAt == resource.data.location.locatedAt)
+        );
+
+      allow delete: if false;
+
+      // 管理者アプリ：打刻の追加（修正申請の承認・管理者の直接追加）。位置は「位置なし」
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['userId', 'workDate', 'month', 'kind', 'punchedAt', 'receivedAt', 'locationStatus', 'corrected', 'correctionId', 'correctedBy', 'correctedAt', 'correctionReason'])
+        && request.resource.data.userId is string
+        && request.resource.data.workDate is string
+        && request.resource.data.month is string
+        && request.resource.data.kind in ['in', 'out']
+        && request.resource.data.punchedAt is timestamp
+        && request.resource.data.receivedAt == request.time
+        && request.resource.data.corrected == true
+        && request.resource.data.locationStatus == 'unavailable'
+        && (
+          // 修正申請の承認
+          request.resource.data.correctionId is string
+          // 管理者の直接追加（理由が必須）
+          || (request.resource.data.correctedBy == request.auth.uid
+            && request.resource.data.correctedAt == request.time
+            && request.resource.data.correctionReason is string
+            && request.resource.data.correctionReason.size() > 0)
+        );
+
+      // 管理者アプリ：時刻の修正。従業員・勤務日・種類・位置は変えられない。元の時刻は必ず残す
+      allow update: if isAdmin()
+        && changedKeys().hasOnly(['punchedAt', 'corrected', 'originalPunchedAt', 'correctionId', 'correctedBy', 'correctedAt', 'correctionReason'])
+        && request.resource.data.punchedAt is timestamp
+        && request.resource.data.corrected == true
+        && ('originalPunchedAt' in resource.data
+          ? request.resource.data.originalPunchedAt == resource.data.originalPunchedAt
+          : (!changedKeys().hasAny(['punchedAt']) || request.resource.data.originalPunchedAt == resource.data.punchedAt))
+        && (
+          // 修正申請の承認
+          (changedKeys().hasAny(['correctionId']) && request.resource.data.correctionId is string)
+          // 管理者の直接修正（理由が必須）
+          || (request.resource.data.correctedBy == request.auth.uid
+            && request.resource.data.correctedAt == request.time
+            && request.resource.data.correctionReason is string
+            && request.resource.data.correctionReason.size() > 0)
+        );
+
+      // 管理者アプリ：打刻の削除。同じ書き込みで punchDeletions に削除前の記録を作るときだけ
+      allow delete: if isAdmin()
+        && !exists(/databases/$(database)/documents/punchDeletions/$(punchId))
+        && existsAfter(/databases/$(database)/documents/punchDeletions/$(punchId));
+    }
+
+    // 管理者が削除した打刻の記録：追加だけ。変更・削除はできない
+    match /punchDeletions/{punchId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['punchId', 'punch', 'userId', 'workDate', 'reason', 'deletedBy', 'deletedAt'])
+        && request.resource.data.punchId == punchId
+        && request.resource.data.deletedBy == request.auth.uid
+        && request.resource.data.deletedAt == request.time
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        // 打刻が今あって、同じ書き込みで消されること
+        && exists(/databases/$(database)/documents/attendancePunches/$(punchId))
+        && !existsAfter(/databases/$(database)/documents/attendancePunches/$(punchId));
+      allow update, delete: if false;
+    }
+
+    // 打刻の修正申請：本人が作成・取り消し。承認・却下は管理者だけ
+    match /attendanceCorrections/{correctionId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+
+      allow create: if createsOwn()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.kind in ['missingClockIn', 'missingClockOut', 'wrongTime', 'noBreak']
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && !('reviewedBy' in request.resource.data && request.resource.data.reviewedBy != null);
+
+      allow update: if isOwner(resource.data.userId)
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'cancelled'
+        && changedKeys().hasOnly(['status', 'cancelledAt']);
+
+      allow delete: if false;
+
+      // 管理者アプリ：承認・却下（申請中のものだけ。本人が取り消した申請は承認できない）
+      allow update: if isAdmin()
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['approved', 'rejected']
+        && changedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt', 'rejectReason'])
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && (request.resource.data.status == 'approved'
+          || (request.resource.data.rejectReason is string && request.resource.data.rejectReason.size() > 0));
+
+      // 管理者アプリ：休憩の修正（承認済みの「休憩を取れなかった」を管理者が作る）
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['userId', 'workDate', 'month', 'targetPunchIds', 'kind', 'requestedBreakMinutes', 'reason', 'status', 'createdBy', 'reviewedBy', 'reviewedAt', 'createdAt'])
+        && request.resource.data.userId is string
+        && request.resource.data.workDate is string
+        && request.resource.data.month is string
+        && request.resource.data.kind == 'noBreak'
+        && request.resource.data.status == 'approved'
+        && request.resource.data.requestedBreakMinutes is int
+        && request.resource.data.requestedBreakMinutes >= 0
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.createdAt == request.time;
+    }
+
+    // 日報：承認前（下書き・提出済み）なら本人が更新できる
+    match /dailyReports/{reportId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+
+      allow create: if createsOwn()
+        && request.resource.data.status in ['draft', 'submitted'];
+
+      allow update: if isOwner(resource.data.userId) && keepsOwner()
+        && resource.data.status in ['draft', 'submitted']
+        && request.resource.data.status in ['draft', 'submitted']
+        // 提出済みを下書きに戻すことはしない
+        && !(resource.data.status == 'submitted' && request.resource.data.status == 'draft');
+
+      // 下書きだけ本人が削除できる
+      allow delete: if isOwner(resource.data.userId) && resource.data.status == 'draft';
+
+      // 管理者アプリ：承認（提出済み → 承認済み）と差し戻し（提出済み・承認済み → 下書き、理由が必須）
+      allow update: if isAdmin()
+        && (
+          (resource.data.status == 'submitted'
+            && request.resource.data.status == 'approved'
+            && changedKeys().hasOnly(['status', 'approvedBy', 'approvedAt'])
+            && request.resource.data.approvedBy == request.auth.uid
+            && request.resource.data.approvedAt == request.time)
+          || (resource.data.status in ['submitted', 'approved']
+            && request.resource.data.status == 'draft'
+            && changedKeys().hasOnly(['status', 'returnReason', 'returnedBy', 'returnedAt', 'approvedBy', 'approvedAt'])
+            && request.resource.data.returnReason is string
+            && request.resource.data.returnReason.size() > 0
+            && request.resource.data.returnedBy == request.auth.uid
+            && request.resource.data.returnedAt == request.time
+            && !('approvedBy' in request.resource.data)
+            && !('approvedAt' in request.resource.data))
+        );
+
+      // 修正履歴：追加だけ。本人も管理者も変更・削除できない
+      match /revisions/{revId} {
+        function report() {
+          return get(/databases/$(database)/documents/dailyReports/$(reportId)).data;
+        }
+        allow read: if isOwner(report().userId) || isAdmin();
+        allow create: if isOwner(report().userId) && request.resource.data.editedBy == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // 経費：承認前（下書き・申請済み・差し戻し）なら本人が更新・取り消しできる
+    match /expenses/{expenseId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+
+      allow create: if createsOwn()
+        && request.resource.data.status in ['draft', 'submitted'];
+
+      allow update: if isOwner(resource.data.userId) && keepsOwner()
+        && resource.data.status in ['draft', 'submitted', 'returned']
+        && request.resource.data.status in ['draft', 'submitted'];
+
+      allow delete: if isOwner(resource.data.userId) && resource.data.status in ['draft', 'returned'];
+
+      // 管理者アプリ：承認（申請済み → 承認済み）と差し戻し（申請済み・承認済み → 差し戻し、理由が必須）
+      allow update: if isAdmin()
+        && changedKeys().hasOnly(['status', 'returnReason', 'reviewedBy', 'reviewedAt'])
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && (
+          (resource.data.status == 'submitted' && request.resource.data.status == 'approved')
+          || (resource.data.status in ['submitted', 'approved']
+            && request.resource.data.status == 'returned'
+            && request.resource.data.returnReason is string
+            && request.resource.data.returnReason.size() > 0)
+        );
+    }
+
+    // 勤務先の一覧
+    match /sites/{siteId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // 日報の項目・経費の区分・会社の設定・休日カレンダー
+    match /settings/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // 管理者アプリ：見積書（管理者だけ。削除は下書きだけ）
+    match /estimates/{estimateId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isAdmin() && resource.data.status == 'draft';
+    }
+  }
+}

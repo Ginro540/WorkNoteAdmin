@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ワークノート管理 仕様書</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 仕様書。広い画面は左に目次（sticky）、本文は1カラム。狭い画面は目次を上に畳む。 */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #1b2330;
+  --muted: #5d6778;
+  --line: #dde2ea;
+  --accent: #1f5e8c;
+  --accent-soft: #e4eef6;
+  --warn: #9a5b00;
+  --warn-soft: #fbf1e1;
+  --ok: #2f6b45;
+  --ok-soft: #e5f2ea;
+  --font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --surface: #1a2029; --ink: #e5e9ef; --muted: #9aa4b4; --line: #2c3441;
+    --accent: #79b2dd; --accent-soft: #1d2d3c; --warn: #e3b067; --warn-soft: #33281a;
+    --ok: #82c69b; --ok-soft: #1c2e23; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a2029; --ink: #e5e9ef; --muted: #9aa4b4; --line: #2c3441;
+  --accent: #79b2dd; --accent-soft: #1d2d3c; --warn: #e3b067; --warn-soft: #33281a;
+  --ok: #82c69b; --ok-soft: #1c2e23; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.8;
+  padding-inline: 16px; padding-block: 0;
+}
+.wrap {
+  max-width: 1120px; margin: 0 auto;
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px;
+  padding-block: 40px 80px;
+}
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 24px 56px; } }
+
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13px; }
+nav.toc p { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; color: var(--muted); }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+nav.toc a {
+  display: block; padding: 4px 10px; border-radius: 6px;
+  color: var(--muted); text-decoration: none;
+}
+nav.toc a:hover, nav.toc a:focus-visible { background: var(--accent-soft); color: var(--accent); outline: none; }
+@media (max-width: 860px) {
+  nav.toc { position: static; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--surface); }
+  nav.toc ol { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}
+
+main { min-width: 0; }
+header.doc { border-bottom: 2px solid var(--ink); padding-bottom: 20px; margin-bottom: 8px; }
+.eyebrow { font-size: 12px; letter-spacing: .1em; color: var(--accent); font-weight: 700; margin: 0; }
+h1 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 4vw, 34px);
+  line-height: 1.35; margin: 6px 0 12px; text-wrap: balance;
+}
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 13px; color: var(--muted); margin: 0; }
+.meta b { color: var(--ink); font-weight: 500; }
+
+section { padding-top: 36px; scroll-margin-top: 16px; }
+h2 {
+  font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.4;
+  margin: 0 0 12px; display: flex; gap: 12px; align-items: baseline; text-wrap: balance;
+}
+h2 .no { font-family: var(--font-mono); font-size: 13px; color: var(--accent); font-weight: 500; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 16px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; max-width: 68ch; }
+.lead { font-size: 16px; }
+ul, ol.steps { margin: 0 0 12px; padding-left: 1.4em; max-width: 68ch; }
+li { margin: 2px 0; }
+code, .mono { font-family: var(--font-mono); font-size: .86em; }
+code { background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 4px; }
+
+.table-wrap { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.6; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; letter-spacing: .04em; color: var(--muted); font-weight: 500; background: var(--bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; }
+td .sub { display: block; color: var(--muted); font-size: 12.5px; }
+
+.pill { display: inline-block; font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+.pill.req { background: var(--accent-soft); color: var(--accent); }
+.pill.auto { background: var(--ok-soft); color: var(--ok); }
+.pill.later { background: var(--warn-soft); color: var(--warn); }
+
+.note {
+  border-left: 3px solid var(--warn); background: var(--warn-soft);
+  padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0 16px; font-size: 14px; max-width: 72ch;
+}
+.note b { color: var(--warn); }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 8px 0 16px; }
+.box { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--surface); min-width: 0; }
+.box h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: .04em; color: var(--muted); font-weight: 500; }
+.box ul { margin: 0; padding-left: 1.2em; font-size: 14px; }
+
+/* 流れ図（手書きのフロー） */
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 8px 0 16px; }
+.flow .step {
+  flex: 1 1 150px; min-width: 0; border: 1px solid var(--line); background: var(--surface);
+  border-radius: 10px; padding: 10px 12px; font-size: 13.5px; line-height: 1.55; position: relative;
+}
+.flow .step b { display: block; font-family: var(--font-display); font-size: 14.5px; margin-bottom: 2px; }
+.flow .step .where { font-size: 11.5px; color: var(--muted); }
+.flow .arrow { align-self: center; color: var(--muted); font-size: 18px; }
+@media (max-width: 600px) { .flow { flex-direction: column; } .flow .arrow { transform: rotate(90deg); align-self: center; } }
+
+/* 構成図 */
+.arch { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.3fr); gap: 12px; align-items: center; margin: 8px 0 16px; }
+.arch .side { border: 1.5px solid var(--ink); border-radius: 14px; padding: 14px; background: var(--surface); }
+.arch .side h4 { margin: 0 0 8px; font-family: var(--font-display); font-size: 15px; }
+.arch .part { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-top: 6px; font-size: 13px; background: var(--bg); }
+.arch .part span { display: block; color: var(--muted); font-size: 12px; }
+.arch .link { text-align: center; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.arch .link .bar { font-size: 20px; color: var(--accent); }
+@media (max-width: 680px) { .arch { grid-template-columns: minmax(0, 1fr); } .arch .link .bar { display: inline-block; transform: rotate(90deg); } }
+
+.states { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; margin: 4px 0 12px; }
+.states .s { border: 1px solid var(--line); background: var(--surface); padding: 2px 10px; border-radius: 99px; }
+.states .s.future { border-style: dashed; color: var(--muted); }
+.states .a { color: var(--muted); }
+
+.checklist { list-style: none; padding-left: 0; }
+.checklist li { padding-left: 1.6em; position: relative; }
+.checklist li::before { content: "□"; position: absolute; left: 0; color: var(--muted); }
+
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+
+/* 画面イメージ: iPhone の枠つきで横に並べる。狭い画面では2列 */
+.shots-group { margin-top: 28px; }
+.shots-group h4 { margin: 0 0 4px; font-size: 15px; }
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 22px 18px; margin-top: 14px; }
+.shot { margin: 0; }
+.phone { background: #111; border-radius: 30px; padding: 7px; box-shadow: 0 10px 24px rgba(20,30,50,.16); }
+.phone img { display: block; width: 100%; height: auto; border-radius: 24px; }
+.shot figcaption { margin-top: 10px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.shot figcaption b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 2px; }
+@media (max-width: 520px) { .shots { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; } .phone { border-radius: 22px; padding: 5px; } .phone img { border-radius: 18px; } }
+
+.app-id { display: flex; align-items: center; gap: 16px; margin: 18px 0 6px; }
+.app-id img { width: 76px; height: 76px; border-radius: 18px; box-shadow: 0 6px 16px rgba(40,40,120,.22); }
+.app-id b { display: block; font-family: var(--font-display); font-size: 18px; }
+.app-id span { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="toc" aria-label="目次">
+    <p>目次</p>
+    <ol>
+      <li><a href="#overview">1. 概要</a></li>
+      <li><a href="#arch">2. システム構成</a></li>
+      <li><a href="#auth">3. ログインと権限</a></li>
+      <li><a href="#screens">4. 画面一覧</a></li>
+      <li><a href="#approval">5. 承認</a></li>
+      <li><a href="#attendance">6. 勤怠の確認・修正</a></li>
+      <li><a href="#master">7. マスタの管理</a></li>
+      <li><a href="#estimate">8. 見積書</a></li>
+      <li><a href="#data">9. データ設計</a></li>
+      <li><a href="#rules">10. セキュリティルール</a></li>
+      <li><a href="#nonfunc">11. 非機能要件</a></li>
+      <li><a href="#employee-app">12. 従業員アプリへの提案</a></li>
+      <li><a href="#open">13. 未決事項</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="doc">
+      <p class="eyebrow">仕様書 初版（案）</p>
+      <h1>ワークノート管理（管理者用アプリ）仕様書</h1>
+      <p class="meta"><span>作成日 <b>2026-10-26</b></span><span>アプリ名 <b>ワークノート管理</b></span><span>対象 <b>Web（iPad・Mac・PC）</b></span><span>バックエンド <b>Firebase（従業員アプリと共用）</b></span></p>
+    </header>
+
+    <section id="overview">
+      <h2><span class="no">01</span>概要</h2>
+      <p class="lead">管理者が<strong>日報・経費・打刻の修正申請を承認</strong>し、<strong>全員の勤怠を確認・修正</strong>し、<strong>勤務先や会社の設定などのマスタを管理</strong>し、<strong>見積書を作成</strong>するためのアプリです。従業員用 iPhone アプリ「ワークノート」と同じ Firebase のデータを使います。</p>
+      <p>ブラウザで動く Web アプリとして作ります。iPad・Mac 用には、この Web アプリを画面いっぱいに表示する専用アプリ（WebView）も用意します。どちらで使っても中身は同じです。</p>
+      <div class="cols">
+        <div class="box">
+          <h4>今回の対象</h4>
+          <ul>
+            <li>Web アプリ（iPad・Mac・Windows のブラウザ）</li>
+            <li>iPad・Mac 用の専用アプリ（WebView で表示）</li>
+            <li>承認（日報・経費・打刻の修正申請）</li>
+            <li>全員の勤怠の確認、打刻の直接修正・追加・削除</li>
+            <li>マスタの管理（従業員・勤務先・休業日・日報の項目・経費の区分・会社の設定）</li>
+            <li>見積書の作成と PDF の出力・共有</li>
+          </ul>
+        </div>
+        <div class="box">
+          <h4>今回の対象外（後で検討）</h4>
+          <ul>
+            <li>従業員アカウントの無効化・削除（<a href="#open">未決事項</a>）</li>
+            <li>勤怠・経費の CSV 出力（給与・会計ソフトへの連携）</li>
+            <li>見積書の印影、請求書への変換</li>
+            <li>通知（承認待ちが増えたときのメールなど）</li>
+          </ul>
+        </div>
+      </div>
+      <div class="note"><b>前提</b>　従業員アプリのデータの形（<code>Models.swift</code>）と計算（<code>WorkNoteCore</code>）に合わせます。従業員アプリのコードは変更しません。必要な変更は <a href="#employee-app">12. 従業員アプリへの提案</a> にまとめます。</div>
+    </section>
+
+    <section id="arch">
+      <h2><span class="no">02</span>システム構成</h2>
+      <p>Web アプリを Firebase Hosting に置き、ブラウザまたは専用アプリから開きます。データは従業員アプリと同じ Cloud Firestore を読み書きします。料金プランは Spark（無料）のままで動くようにします。</p>
+      <div class="arch" role="img" aria-label="管理者アプリとFirebaseの構成図">
+        <div class="side">
+          <h4>管理者アプリ（Web）</h4>
+          <div class="part">ブラウザ<span>iPad の Safari、Mac・PC の Safari / Chrome / Edge</span></div>
+          <div class="part">専用アプリ（iPad・Mac）<span>WKWebView で Web アプリを表示。PDF の保存・共有は端末の機能を使う</span></div>
+          <div class="part">勤怠の計算<span>WorkNoteCore を TypeScript に移植（同じ結果になることをテストで確認）</span></div>
+          <div class="part">オフライン<span>読んだデータは端末に保存。書き込みはつながったら送信</span></div>
+        </div>
+        <div class="link"><div class="bar">⇄</div>同じデータを<br>読み書き</div>
+        <div class="side">
+          <h4>Firebase（worknote-6dc51）</h4>
+          <div class="part">Hosting<span>Web アプリの公開（https://worknote-6dc51.web.app）。Spark でも無料</span></div>
+          <div class="part">Authentication<span>メールアドレス＋パスワード（従業員と共通）</span></div>
+          <div class="part">Cloud Firestore<span>打刻・申請・日報・経費・設定・見積書</span></div>
+          <div class="part">Cloud Storage<span>画像の表示（Blaze にして画像の送信を有効にしてから）</span></div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>項目</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>Web アプリ</td><td>React・TypeScript（Vite）、Firebase JS SDK、UI は Mantine、地図は Leaflet（OpenStreetMap）</td></tr>
+            <tr><td>専用アプリ</td><td>SwiftUI ＋ WKWebView、iPadOS 18 以降・Mac Catalyst（macOS 15 以降）。Xcode 27、XcodeGen</td></tr>
+            <tr><td>リポジトリ</td><td>GitHub <code>Ginro540/WorkNoteAdmin</code>（Private）。<code>web/</code>（Web アプリ）、<code>ios/</code>（専用アプリ）、<code>firebase/</code>（ルール・Hosting の設定）</td></tr>
+            <tr><td>Firebase の登録</td><td>プロジェクトに Web アプリ「ワークノート管理」を追加し、その設定値を使う</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><b>Spark プランでできないこと</b>　Cloud Functions と Cloud Storage は使えません。そのため次の制約があります。
+        <ul style="margin:6px 0 0">
+          <li>日報の写真・領収書の画像は、<code>settings/company.imageUploadEnabled</code> が false の間は従業員の iPhone の中にしかありません。管理者アプリでは「画像は従業員の端末にあります」と表示します。</li>
+          <li>従業員のアカウントは、管理者アプリの中で2つ目の Firebase の接続を使って作ります（管理者のログインを切らないため）。無効化・削除はできません。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="auth">
+      <h2><span class="no">03</span>ログインと権限</h2>
+      <ul>
+        <li>従業員アプリと同じメールアドレスとパスワードでログインします。一度ログインすれば、次からは自動でログイン状態になります。</li>
+        <li>ログイン後に <code>users/{uid}.role</code> を確認し、<code>admin</code> でなければ「管理者のアカウントではありません」と表示します。この画面ではログアウトだけができます。</li>
+        <li>パスワードを忘れたときは、ログイン画面から再設定メールを送れます。</li>
+        <li>管理者のアカウントは、管理者アプリの「従業員」画面で権限を「管理者」にして作ります。最初の1人は、従業員アプリのスクリプト（<code>npm run create-user -- &lt;email&gt; '&lt;password&gt;' '&lt;名前&gt;' admin</code>）で発行します。</li>
+      </ul>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>権限</th><th>管理者アプリ</th><th>できること</th></tr></thead>
+          <tbody>
+            <tr><td><b>従業員</b><span class="sub mono">employee</span></td><td>使えない</td><td>—（従業員アプリだけ）</td></tr>
+            <tr><td><b>管理者</b><span class="sub mono">admin</span></td><td>使える</td><td>全員分の閲覧、承認・差し戻し、打刻の修正、マスタの変更、見積書の作成</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>できる操作は画面だけでなく、Firestore のセキュリティルールでも制限します（<a href="#rules">10. セキュリティルール</a>）。</p>
+    </section>
+
+    <section id="screens">
+      <h2><span class="no">04</span>画面一覧</h2>
+      <p>左にメニュー、中央に一覧、右に詳細を並べます。画面の幅が狭いとき（縦向きの iPad など）は、一覧と詳細を切り替えて表示します。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メニュー</th><th>一覧</th><th>詳細・操作</th></tr></thead>
+          <tbody>
+            <tr><td>—</td><td>ログイン</td><td>メールアドレス・パスワード、パスワードの再設定</td></tr>
+            <tr><td><b>ホーム</b></td><td>承認待ちの件数：提出済みの日報、申請済みの経費、申請中の修正申請。前日までの退勤漏れの件数</td><td>件数をタップするとその一覧に移る</td></tr>
+            <tr><td><b>日報</b></td><td>状態（提出済み／承認済み／下書き／すべて）、月、従業員で絞り込み。日付の新しい順</td><td>項目・写真・修正履歴の表示。承認、差し戻し（理由）</td></tr>
+            <tr><td><b>経費</b></td><td>状態・月・従業員・区分で絞り込み。月の合計と、従業員ごと・区分ごとの合計</td><td>領収書の画像・OCR テキスト・各項目の表示。承認、差し戻し（理由）</td></tr>
+            <tr><td><b>修正申請</b></td><td>申請中／処理済み（承認・却下・取り消し）。古い順</td><td>申請内容、今の打刻と承認後の打刻の比較。承認、却下（理由）</td></tr>
+            <tr><td><b>勤怠</b></td><td>月を選び、全員の集計（出勤日数・実働・時間外・退勤漏れ・申請中）。従業員を選ぶとその人の日ごとの一覧</td><td>その日の打刻・場所・地図・集計・日報。打刻の修正・追加・削除</td></tr>
+            <tr><td><b>見積書</b></td><td>番号・件名・宛先・合計・発行日。件名・宛先で検索</td><td>作成・編集・複製、PDF のプレビュー、保存・共有</td></tr>
+            <tr><td rowspan="7"><b>マスタ</b></td><td>従業員</td><td>一覧、追加、名前・権限の変更、パスワード再設定メールの送信</td></tr>
+            <tr><td>勤務先</td><td>追加、編集、使う／使わないの切り替え、並べ替え</td></tr>
+            <tr><td>休業日</td><td>年ごとの祝日・会社の休業日の追加・削除</td></tr>
+            <tr><td>日報の項目</td><td>項目の追加、名前・必須・並び順の変更</td></tr>
+            <tr><td>経費の区分</td><td>区分の追加、名前・判定キーワード・並び順の変更</td></tr>
+            <tr><td>会社の設定</td><td>締め日、修正申請の期限、休憩のルール、画像の送信</td></tr>
+            <tr><td>見積書の発行元</td><td>社名・住所・電話・インボイス登録番号など</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>共通の表示</h3>
+      <ul>
+        <li>従業員の名前は <code>users/{uid}.displayName</code> を表示します。見つからないときは「（不明なユーザー）」と表示します。</li>
+        <li>日付は「10/19（月）」、時刻は「08:57」、時間は「8:13」の形で、従業員アプリと同じにします。いつも日本時間で表示します。</li>
+        <li>土曜は青、日曜・祝日・会社の休業日は赤で表示します。</li>
+        <li>まだサーバーに届いていない書き込み（オフライン中の操作）には「未送信」と表示します。</li>
+      </ul>
+    </section>
+
+    <section id="approval">
+      <h2><span class="no">05</span>承認</h2>
+
+      <h3>日報</h3>
+      <div class="states"><span class="s">下書き</span><span class="a">→ 提出 →</span><span class="s">提出済み</span><span class="a">→ 承認 →</span><span class="s">承認済み</span></div>
+      <div class="states"><span class="s">提出済み／承認済み</span><span class="a">→ 差し戻し（理由） →</span><span class="s">下書き</span></div>
+      <ul>
+        <li><b>確認</b>：日報の項目（<code>settings/reportTemplate</code> の並び順）、勤務先、写真、提出日時、更新日時を表示します。</li>
+        <li><b>修正履歴</b>：<code>revisions</code> を新しい順に並べ、変わった項目は修正前を取り消し線で表示します（従業員アプリと同じ表示）。</li>
+        <li><b>承認</b>：<code>status</code> を <code>approved</code> にし、<code>approvedBy</code> と <code>approvedAt</code> を記録します。承認すると、本人は修正できなくなります。</li>
+        <li><b>差し戻し</b>：理由を必ず入力します。<code>status</code> を <code>draft</code> に戻し、<code>returnReason</code>・<code>returnedBy</code>・<code>returnedAt</code> を記録します。承認済みの日報も差し戻せます。
+          <span class="sub">従業員アプリの日報の状態には「差し戻し」がないので、新しい状態の値は作らず「下書き」に戻します。</span></li>
+        <li>一覧の初期表示は「提出済み」です。状態ごとの件数も表示します。</li>
+        <li>まとめて承認：一覧で複数の日報を選び、一度に承認できます。</li>
+      </ul>
+
+      <h3>経費</h3>
+      <div class="states"><span class="s">申請済み</span><span class="a">→ 承認 →</span><span class="s">承認済み</span></div>
+      <div class="states"><span class="s">申請済み／承認済み</span><span class="a">→ 差し戻し（理由） →</span><span class="s">差し戻し</span><span class="a">→ 本人が直して申請 →</span><span class="s">申請済み</span></div>
+      <ul>
+        <li><b>確認</b>：利用日・金額・お店・会社名・区分・インボイス番号・メモ・申請日時と、領収書の画像・OCR テキスト（読み取った全文）を表示します。</li>
+        <li><b>承認</b>：<code>status</code> を <code>approved</code> にし、<code>reviewedBy</code> と <code>reviewedAt</code> を記録します。</li>
+        <li><b>差し戻し</b>：理由を必ず入力します。<code>status</code> を <code>returned</code> にし、<code>returnReason</code>・<code>reviewedBy</code>・<code>reviewedAt</code> を記録します。従業員アプリには差し戻しの理由が表示されます。</li>
+        <li><b>合計</b>：月を選び、申請済み・承認済みの経費の合計を、従業員ごと・区分ごとに表示します。下書きと差し戻しは合計に入れません。</li>
+        <li>インボイス番号が空の経費には「インボイス番号なし」の印を付けます。</li>
+        <li>まとめて承認：一覧で複数の経費を選び、一度に承認できます。</li>
+      </ul>
+
+      <h3>打刻の修正申請</h3>
+      <div class="states"><span class="s">申請中</span><span class="a">→ 承認 →</span><span class="s">承認済み（勤怠に反映）</span></div>
+      <div class="states"><span class="s">申請中</span><span class="a">→ 却下（理由） →</span><span class="s">却下</span></div>
+      <ul>
+        <li><b>確認</b>：申請の種類・勤務日・正しい時刻・休憩・理由を表示します。その日の今の打刻と、承認したあとの打刻と集計（実働など）を並べて比べられます。</li>
+        <li><b>承認</b>：下の表のように打刻を書き換え、申請の <code>status</code> を <code>approved</code> にし、<code>reviewedBy</code> と <code>reviewedAt</code> を記録します。申請と打刻は1回でまとめて書き込みます（トランザクション）。書き込む直前に、申請がまだ「申請中」か確かめます。本人が取り消した申請は承認しません。</li>
+        <li><b>却下</b>：理由を必ず入力します。<code>status</code> を <code>rejected</code> にし、<code>rejectReason</code>・<code>reviewedBy</code>・<code>reviewedAt</code> を記録します。</li>
+        <li>修正申請の期限（締め日の翌月の第3営業日）は、本人が申請するときだけの制限です。期限を過ぎていても、管理者は承認・却下できます。</li>
+      </ul>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>申請の種類</th><th>承認したときの反映</th></tr></thead>
+          <tbody>
+            <tr><td>出勤の打刻漏れ<span class="sub mono">missingClockIn</span></td><td rowspan="3"><code>requestedClockIn</code>・<code>requestedClockOut</code> のうち入っているものを、それぞれ次のように反映する。
+              <ul style="margin:4px 0 0">
+                <li><code>targetPunchIds</code> の中に同じ種類（出勤／退勤）の打刻があれば、その <code>punchedAt</code> を書き換える。</li>
+                <li>なければ、打刻を新しく追加する（勤務日は申請の <code>workDate</code>、位置は「位置なし」）。</li>
+              </ul>
+              どちらの場合も、打刻に <code>corrected: true</code> と <code>correctionId</code> を付ける。書き換えたときは元の時刻を <code>originalPunchedAt</code> に残す（すでに入っていれば上書きしない）。</td></tr>
+            <tr><td>退勤の打刻漏れ<span class="sub mono">missingClockOut</span></td></tr>
+            <tr><td>時刻の誤り<span class="sub mono">wrongTime</span></td></tr>
+            <tr><td>休憩を取れなかった<span class="sub mono">noBreak</span></td><td>打刻は変えない。申請を承認するだけで、従業員アプリがその日の休憩に <code>requestedBreakMinutes</code> を使う。管理者アプリの集計も同じ。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="attendance">
+      <h2><span class="no">06</span>勤怠の確認・修正</h2>
+      <h3>全員の月の集計</h3>
+      <p>月（締め日で区切る）を選ぶと、従業員ごとに次の値を表示します。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>従業員</th><th>出勤日数</th><th>合計実働</th><th>時間外</th><th>退勤漏れ</th><th>申請中</th><th>日報未提出</th></tr></thead>
+          <tbody>
+            <tr><td>山田 太郎</td><td class="num">18</td><td class="num">146:20</td><td class="num">4:15</td><td class="num">1</td><td class="num">0</td><td class="num">2</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>表示例です。日報未提出は、打刻がある日に提出済み・承認済みの日報がない日の数です。</p>
+
+      <h3>従業員ごとの月の勤怠</h3>
+      <p>従業員アプリの「月の勤怠」と同じ列に、管理者用の印を足して表示します。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日付</th><th>最初の出勤</th><th>最後の退勤</th><th>拘束時間</th><th>中抜け</th><th>休憩</th><th>実働時間</th><th>時間外</th><th>状態</th><th>印</th><th>備考（日報）</th></tr></thead>
+          <tbody>
+            <tr><td>10/16（金）</td><td>08:52</td><td>18:05</td><td class="num">9:13</td><td class="num">0:00</td><td class="num">1:00</td><td class="num">8:13</td><td class="num">0:13</td><td>退勤済み</td><td>時刻のずれ</td><td>日報未提出</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>計算は WorkNoteCore の <code>AttendanceCalculator</code> と同じです。休憩のルールは <code>settings/company.breakRules</code>、「休憩を取れなかった」の承認があればその休憩時間を使います。</li>
+        <li>退勤漏れの判断も従業員アプリと同じにします。前日までの勤務日で勤務が閉じていなければ「退勤漏れ」です。ただし、出勤から16時間以内の勤務は「勤務中」とします。</li>
+        <li><b>印</b>：
+          <ul>
+            <li>退勤漏れ</li>
+            <li>修正済み（<code>corrected</code>）</li>
+            <li>時刻のずれ（端末の時刻とサーバーが受け取った時刻が10分以上違う）</li>
+            <li>位置なし</li>
+            <li>修正申請中</li>
+          </ul>
+          印で絞り込めます。</li>
+        <li>月の上部に、出勤日数・合計実働・時間外の合計を表示します。</li>
+      </ul>
+
+      <h3>日ごとの詳細</h3>
+      <ul>
+        <li>勤務ごとの出勤・退勤の時刻、住所、位置の精度、「打刻から◯分後に取得」、サーバーが受け取った時刻を表示します。</li>
+        <li>その日の打刻場所を地図にピンで表示します（出勤は緑、退勤はオレンジ）。精度の円も表示します。</li>
+        <li>修正済みの打刻には、元の時刻・どの修正申請か・修正した管理者を表示します。</li>
+        <li>集計（拘束・中抜け・休憩・実働・時間外）と、その日の日報・修正申請へのリンクを表示します。</li>
+      </ul>
+
+      <h3>管理者による打刻の直接修正</h3>
+      <p>修正申請の期限を過ぎた月や、申請がなくても直す必要があるときに使います。どの操作でも、<b>理由の入力を必須</b>にします。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>操作</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>時刻の修正</td><td><code>punchedAt</code> を書き換え、<code>corrected: true</code>・<code>originalPunchedAt</code>（最初の時刻）・<code>correctedBy</code>・<code>correctedAt</code>・<code>correctionReason</code> を記録する。出勤・退勤の種類と勤務日は変えない。</td></tr>
+            <tr><td>打刻の追加</td><td>勤務日・種類（出勤／退勤）・時刻を指定して追加する。<code>corrected: true</code>、位置は「位置なし」、<code>correctedBy</code>・<code>correctedAt</code>・<code>correctionReason</code> を記録する。</td></tr>
+            <tr><td>打刻の削除</td><td>二重押しなどの間違った打刻を消す。消す前の内容をすべて <code>punchDeletions/{id}</code> に記録として残す（誰が・いつ・理由も残す）。この記録は変更・削除できない。</td></tr>
+            <tr><td>休憩の修正</td><td>この日の休憩を指定した分にする。管理者が「休憩を取れなかった」の修正申請を代わりに作り、承認済みの状態で登録する（<code>createdBy</code> に管理者を記録）。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><b>注意</b>　勤務日をまたいで打刻を移したいとき（勤務日の付け間違いなど）は、削除と追加で直します。保存する前に、直したあとの集計を確認画面で表示します。</div>
+    </section>
+
+    <section id="master">
+      <h2><span class="no">07</span>マスタの管理</h2>
+
+      <h3>従業員（users）</h3>
+      <ul>
+        <li><b>一覧</b>：名前・メールアドレス・権限・登録日を表示します。名前で検索できます。</li>
+        <li><b>追加</b>：メールアドレス・初期パスワード（8文字以上）・名前・権限を入力します。
+          <ul>
+            <li>アカウントは、管理者のログインとは別の2つ目の Firebase の接続で作り、作ったらすぐにその接続からログアウトします。</li>
+            <li><code>users/{uid}</code> は管理者の接続で書きます。</li>
+            <li>アカウントだけできて <code>users/{uid}</code> の書き込みに失敗したときは、もう一度書き込む画面を出します。</li>
+          </ul></li>
+        <li><b>変更</b>：名前と権限（従業員／管理者）を変えられます。自分の権限は変えられません（管理者がいなくなるのを防ぐため）。メールアドレスは変えられません。</li>
+        <li><b>パスワード</b>：再設定メールを送れます。管理者がパスワードを直接見たり変えたりすることはできません。</li>
+        <li>アカウントの無効化・削除は今回は作りません（<a href="#open">未決事項</a>）。</li>
+      </ul>
+
+      <h3>勤務先（sites）</h3>
+      <ul>
+        <li>名前・住所・使う／使わない（<code>active</code>）・並び順（<code>order</code>）を変えられます。</li>
+        <li>日報が勤務先を ID で参照しているので、削除はしません。使わない勤務先は「使わない」にすると、従業員アプリの選択肢に出なくなります。</li>
+        <li>名前・住所で検索できます。上下に動かして並び順を変えられます。</li>
+      </ul>
+
+      <h3>休業日（settings/calendar_{yyyy}）</h3>
+      <ul>
+        <li>年を選び、日付・名前・種類（国民の祝日／会社の休業日）を追加・削除します。</li>
+        <li>修正申請の期限の計算と、勤怠の休日の色分けに使われます。</li>
+        <li>年をまたぐ休業日（年末年始など）は、それぞれの年に登録します。</li>
+      </ul>
+
+      <h3>日報の項目（settings/reportTemplate）</h3>
+      <ul>
+        <li>項目の追加、名前・必須・並び順の変更ができます。</li>
+        <li>追加した項目のキーは自動で決め、あとから変えられません。種類は「1行テキスト」「長文テキスト」「写真」から選びます。</li>
+        <li>従業員アプリが特別に扱う項目（日付 <code>date</code>・作業時間 <code>workTime</code>・訪問先・現場名 <code>site</code>・作業内容 <code>content</code>）は、削除や種類の変更ができません。</li>
+        <li>項目を削除しても、すでに保存された日報の内容は残ります。管理者アプリでは「（削除した項目）」として表示します。</li>
+      </ul>
+
+      <h3>経費の区分（settings/expenseCategories）</h3>
+      <ul>
+        <li>区分の追加、名前・判定キーワード・並び順の変更ができます。</li>
+        <li>「その他」（<code>other</code>）は削除できません。キーワードに当たらない経費はここに入ります。</li>
+        <li>使われている区分は削除できません。使っている経費の件数を表示します。</li>
+      </ul>
+
+      <h3>会社の設定（settings/company）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>設定</th><th>入力</th><th>注意</th></tr></thead>
+          <tbody>
+            <tr><td>締め日 <code>closingDay</code></td><td>月末（0）、または 1〜28 日</td><td>変更する前に保存されたデータの「月」（<code>month</code>）は書き換えない。変更すると確認を出す</td></tr>
+            <tr><td>修正申請の期限 <code>correctionDeadlineBusinessDays</code></td><td>締め日の翌日から数えて何営業日目までか（1〜10）</td><td>入力すると、今月分の期限の日付を見本として表示する</td></tr>
+            <tr><td>休憩のルール <code>breakRules</code></td><td>「拘束 ◯:◯◯ を超えたら休憩 ◯分」を行で追加・削除</td><td>法定の最低限（6:00 超 45分、8:45 超 60分）を下回るときは警告を出す</td></tr>
+            <tr><td>画像の送信 <code>imageUploadEnabled</code></td><td>する／しない</td><td>Blaze プランにして Storage を作ってから「する」にする。切り替えると確認を出す</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>見積書の発行元（settings/estimateIssuer）</h3>
+      <p>社名、郵便番号、住所、電話、FAX、メール、インボイス登録番号（T＋13桁）を入力します。見積書の PDF の右上に出ます。</p>
+    </section>
+
+    <section id="estimate">
+      <h2><span class="no">08</span>見積書</h2>
+      <p>工事・作業の見積書を作り、PDF で保存・共有します。仕様が決まっていなかった部分は、一般的な形で決めました。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>項目</th><th>入力</th><th>必須</th><th>備考</th></tr></thead>
+          <tbody>
+            <tr><td>見積番号</td><td>自動</td><td><span class="pill auto">自動</span></td><td>「2026-0001」の形（発行年＋年ごとの連番）。保存したときに決まる</td></tr>
+            <tr><td>件名</td><td>テキスト</td><td><span class="pill req">必須</span></td><td>例：外壁補修工事</td></tr>
+            <tr><td>宛先</td><td>テキスト＋敬称（御中／様）</td><td><span class="pill req">必須</span></td><td>会社なら「御中」、個人なら「様」</td></tr>
+            <tr><td>現場</td><td>勤務先の一覧から選ぶか手入力</td><td>—</td><td>現場名・住所を PDF に出す</td></tr>
+            <tr><td>発行日</td><td>日付</td><td><span class="pill req">必須</span></td><td>初期値は今日</td></tr>
+            <tr><td>有効期限</td><td>日付</td><td><span class="pill req">必須</span></td><td>初期値は発行日の30日後</td></tr>
+            <tr><td>明細</td><td>品名・数量・単位・単価（行を追加・削除・並べ替え）</td><td><span class="pill req">1行以上</span></td><td>数量は小数第2位まで。金額＝数量×単価（1円未満切り捨て）</td></tr>
+            <tr><td>消費税</td><td>税率（初期値 10%）</td><td><span class="pill auto">自動</span></td><td>小計×税率、1円未満切り捨て</td></tr>
+            <tr><td>合計</td><td>—</td><td><span class="pill auto">自動</span></td><td>小計＋消費税</td></tr>
+            <tr><td>備考</td><td>長文テキスト</td><td>—</td><td>支払条件・工期など</td></tr>
+            <tr><td>担当者</td><td>テキスト</td><td>—</td><td>初期値は作成した管理者の名前</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li><b>状態</b>：下書き／発行済み。発行済みにしても編集はできますが、更新日時を記録します。</li>
+        <li><b>複製</b>：既存の見積書をもとに新しい見積書を作れます（番号は新しく採番）。</li>
+        <li><b>PDF</b>：A4 縦。印刷用の画面を作り、ブラウザの印刷から「PDF として保存」・共有します。専用アプリでは、端末の PDF 作成と共有シート（保存・AirDrop・メールなど）を使います。
+          <span class="sub">配置：上に「御見積書」と番号・発行日、左に宛先と件名・現場・有効期限、右に発行元、中央に「御見積金額 ¥xxx（税込）」を大きく出し、その下に明細表・小計・消費税・合計・備考を並べる。</span></li>
+        <li>見積書は管理者だけが読み書きできます。削除は下書きのときだけできます。</li>
+      </ul>
+    </section>
+
+    <section id="data">
+      <h2><span class="no">09</span>データ設計</h2>
+      <p>従業員アプリのデータの形はそのままにします。管理者アプリが書き込むフィールドと、新しく作るコレクションは次のとおりです。従業員アプリは知らないフィールドを読み飛ばすので、これらのフィールドを足しても従業員アプリは動きます。</p>
+      <h3>既存のコレクションに足すフィールド</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>コレクション</th><th>管理者が書くフィールド</th></tr></thead>
+          <tbody>
+            <tr><td>users/{uid}</td><td>作成時：displayName, email, role, createdAt。変更時：displayName, role</td></tr>
+            <tr><td>attendancePunches/{id}</td><td>修正時：punchedAt, corrected, originalPunchedAt, correctionId（申請からの修正）, <b>correctedBy, correctedAt, correctionReason</b>（新しいフィールド）。追加時：従業員の打刻と同じ形で <code>corrected: true</code>、<code>locationStatus: "unavailable"</code></td></tr>
+            <tr><td>attendanceCorrections/{id}</td><td>承認・却下：status, reviewedBy, reviewedAt, <b>rejectReason</b>（新しいフィールド）。管理者が代わりに作る「休憩を取れなかった」：<b>createdBy</b>（新しいフィールド）</td></tr>
+            <tr><td>dailyReports/{id}</td><td>status, <b>approvedBy, approvedAt, returnReason, returnedBy, returnedAt</b>（新しいフィールド）</td></tr>
+            <tr><td>expenses/{id}</td><td>status, returnReason, <b>reviewedBy, reviewedAt</b>（新しいフィールド）</td></tr>
+            <tr><td>sites/{id}, settings/*</td><td>従業員アプリと同じ形（今のルールでも管理者は書ける）</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>新しいコレクション</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>コレクション</th><th>中身</th><th>主なフィールド</th></tr></thead>
+          <tbody>
+            <tr><td>punchDeletions/{id}</td><td>管理者が削除した打刻の記録</td><td>punchId, punch（削除前の内容すべて）, userId, workDate, reason, deletedBy, deletedAt</td></tr>
+            <tr><td>estimates/{id}</td><td>見積書</td><td>number, status（draft | issued）, title, clientName, clientHonorific（御中 | 様）, siteId, siteName, siteAddress, issueDate, validUntil, items[{name, quantity, unit, unitPrice, amount}], taxRate, subtotal, tax, total, notes, staffName, createdBy, createdAt, updatedAt</td></tr>
+            <tr><td>settings/estimateIssuer</td><td>見積書の発行元</td><td>companyName, postalCode, address, phone, fax, email, invoiceNumber</td></tr>
+            <tr><td>settings/estimateCounter</td><td>見積番号の連番</td><td>{年: 最後の番号}（トランザクションで1つずつ増やす）</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><b>インデックス</b>　管理者アプリの検索は、等号の条件（<code>status</code>・<code>month</code>・<code>userId</code>）の組み合わせだけにし、並べ替えはアプリの中で行います。そのため、新しい複合インデックスは必要ありません。</div>
+    </section>
+
+    <section id="rules">
+      <h2><span class="no">10</span>セキュリティルール</h2>
+      <p>Firestore のルールはプロジェクトに1つだけです。今反映されている従業員用のルール（<code>WorkNote/firebase/firestore.rules</code>）はそのまま残し、管理者の書き込みを許可する条件を<b>足した</b>1つのファイルにします。従業員側の制限は緩めません。今後は <code>WorkNoteAdmin/firebase/firestore.rules</code> を正本にします。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>コレクション</th><th>管理者に足す許可</th></tr></thead>
+          <tbody>
+            <tr><td>users</td><td>create：role が employee か admin、決まったフィールドだけ。update：displayName と role だけ、自分の role は変えられない</td></tr>
+            <tr><td>attendancePunches</td><td>create：<code>corrected == true</code>、kind・時刻・勤務日の形が正しいこと。update：時刻と修正の記録のフィールドだけ（userId・workDate・kind・位置は変えられない）。delete：同じ1回の書き込みの中で punchDeletions に記録を作るときだけ</td></tr>
+            <tr><td>attendanceCorrections</td><td>update：申請中から承認／却下への変更、<code>reviewedBy</code> が自分。create：承認済みの「休憩を取れなかった」だけ（<code>createdBy</code>・<code>reviewedBy</code> が自分）</td></tr>
+            <tr><td>dailyReports</td><td>update：提出済みから承認、提出済み・承認済みから下書き（差し戻し）。状態と承認・差し戻しの記録のフィールドだけ</td></tr>
+            <tr><td>expenses</td><td>update：申請済みから承認、申請済み・承認済みから差し戻し。状態と承認・差し戻しの記録のフィールドだけ</td></tr>
+            <tr><td>punchDeletions</td><td>create と read だけ（変更・削除はできない）</td></tr>
+            <tr><td>estimates</td><td>read・create・update。delete は下書きだけ</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>反映する前に、従業員用ルールとの差分を確認します。反映は <code>firebase deploy --only firestore:rules</code> で行います。Storage のルールは変えません。今のルールでも、管理者は画像を読めます。</p>
+    </section>
+
+    <section id="nonfunc">
+      <h2><span class="no">11</span>非機能要件</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>項目</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>アプリ名</td><td>ワークノート管理</td></tr>
+            <tr><td>対応環境</td><td>iPad の Safari（iPadOS 18 以降）、Mac の Safari・Chrome、Windows の Chrome・Edge（最新版）。画面の幅 768px 以上を想定（狭い画面でも使えるが一覧と詳細を切り替える）</td></tr>
+            <tr><td>専用アプリ</td><td>iPadOS 18 以降、Mac Catalyst（macOS 15 以降）。Web アプリを表示し、PDF の保存・共有は端末の機能を使う。配布は従業員アプリと同じく TestFlight などで、試験運用のあとに決める</td></tr>
+            <tr><td>オフライン</td><td>Firestore のデータを端末に保存（複数のタブでも使える）。電波がなくても読んだデータは見られ、承認などの書き込みはつながったら送信する。ログイン・アカウントの追加・見積番号の採番はつながっているときだけできる</td></tr>
+            <tr><td>時刻</td><td>計算と表示はいつも日本時間（端末のタイムゾーンに関係なく）</td></tr>
+            <tr><td>計算</td><td>WorkNoteCore（Swift）を TypeScript に移植する。同じ入力に同じ結果を返すことを、Swift の結果と比べるテストで確認する</td></tr>
+            <tr><td>公開</td><td>Firebase Hosting（<code>firebase deploy --only hosting</code>）。URL は誰でも開けるが、データはログインとルールで守る</td></tr>
+            <tr><td>料金</td><td>Spark（無料）の範囲で動かす。Firestore の読み取りは1日 5万回までが無料（少人数なら十分）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="employee-app">
+      <h2><span class="no">12</span>従業員アプリへの提案</h2>
+      <p>今回は従業員アプリを変更しません。次の点は、従業員アプリを直すと使いやすくなります。</p>
+      <ul>
+        <li><b>日報の差し戻しの理由を表示する</b>：今は下書きに戻るだけで、<code>returnReason</code> が表示されません。</li>
+        <li><b>修正申請の却下の理由を表示する</b>：<code>rejectReason</code> を申請のカードに出します。</li>
+        <li><b>差し戻し後の修正も修正履歴に残す</b>：今は「提出済み」を直したときだけ履歴を残すので、下書きに戻してから直した内容は履歴に残りません。</li>
+        <li><b>セキュリティルールのファイルを合わせる</b>：<code>WorkNote/firebase/firestore.rules</code> を管理者アプリの正本と同じ内容にします（従業員リポジトリから古いルールを反映してしまうのを防ぐため）。</li>
+      </ul>
+    </section>
+
+    <section id="open">
+      <h2><span class="no">13</span>未決事項</h2>
+      <ul class="checklist">
+        <li>従業員アカウントの無効化・削除（Spark ではアプリからできない。方法の候補：ルールで読み書きを止める／Google ログイン＋管理用 API／Blaze にして Cloud Functions）</li>
+        <li>勤怠・経費の CSV 出力の要否と形式（給与ソフト・会計ソフトに合わせる）</li>
+        <li>見積書の印影・ロゴの画像（Storage を使えるようになってから）</li>
+        <li>専用アプリ（iPad・Mac）の配布方法</li>
+        <li>Blaze プランにする時期（画像の表示、アカウントの管理に関わる）</li>
+      </ul>
+    </section>
+
+    <footer>ワークノート管理（管理者用アプリ）仕様書 初版（案）（2026-10-26）</footer>
+  </main>
+</div>
+
+</body>
+</html>

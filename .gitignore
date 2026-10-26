@@ -1,0 +1,22 @@
+# Web
+web/node_modules/
+web/dist/
+firebase/rules-test/node_modules/
+
+# Xcode
+ios/build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# Swift ツール
+tools/core-golden/.build/
+.swiftpm/
+
+# Firebase
+firebase/.firebase/
+firebase-debug.log
+firestore-debug.log
+*service-account*.json
+.DS_Store
