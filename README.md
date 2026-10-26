@@ -91,3 +91,15 @@ cd ~/WorkNote/firebase/seed && npm run create-user -- <email> '<password>' '<名
 | 管理者の直接修正 | `correctedBy`・`correctedAt`・`correctionReason` を記録。削除は `punchDeletions` に削除前の内容を残す |
 | 休憩の修正 | 管理者が承認済みの「休憩を取れなかった」（`createdBy` 付き）を作る |
 | 見積番号 | `settings/estimateCounter` で年ごとに連番（`2026-0001`） |
+
+## ローカルで確かめる（エミュレーター）
+
+本番には触れず、パソコンの中の Firebase で動かします。3つのターミナルで順に実行します。
+
+```
+cd firebase && firebase emulators:start --project demo-worknote   # Java が必要
+node scripts/seed-emulator.mjs                                   # テスト用のデータを入れる（やり直すときも）
+cd web && npm run dev:emulator                                   # http://127.0.0.1:5174
+```
+
+ログインは admin@example.com / password。データは http://127.0.0.1:4000 で見られます。

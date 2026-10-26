@@ -72,7 +72,10 @@ export const useAuth = () => useContext(AuthContext)
 export interface AdminData {
   uid: string
   me: AppUser
+  /** 退職した人も含む全員（過去のデータの名前を出すため） */
   users: AppUser[]
+  /** 退職していない人 */
+  activeUsers: AppUser[]
   userById: Map<string, AppUser>
   sites: Site[]
   company: CompanySettings
@@ -147,6 +150,7 @@ export function AdminDataProvider({ me, children }: { me: AppUser; children: Rea
       uid: me.id,
       me,
       users,
+      activeUsers: users.filter((u) => !u.retiredAt),
       userById,
       sites,
       company,

@@ -39,14 +39,16 @@ function Gate() {
     )
   }
   if (!user) return <LoginPage />
-  if (!profile || profile.role !== 'admin') {
+  if (!profile || profile.role !== 'admin' || profile.retiredAt) {
     return (
       <Center h="100%" p="md">
         <Paper withBorder p="xl" maw={420}>
           <Stack>
             <Title order={4}>管理者のアカウントではありません</Title>
             <Text size="sm">
-              {user.email} は管理者として登録されていないため、この画面は使えません。従業員の方は iPhone の「ワークノート」をお使いください。
+              {profile?.retiredAt
+                ? `${user.email} は退職の扱いになっているため、この画面は使えません。`
+                : `${user.email} は管理者として登録されていないため、この画面は使えません。従業員の方は iPhone の「ワークノート」をお使いください。`}
             </Text>
             <Button variant="default" onClick={() => signOut(auth)}>
               ログアウト

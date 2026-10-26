@@ -24,6 +24,10 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users/admin'), { displayName: '管理者', email: 'a@example.com', role: 'admin', createdAt: t('2026-10-01') })
     await setDoc(doc(db, 'users/emp'), { displayName: '山田', email: 'e@example.com', role: 'employee', createdAt: t('2026-10-01') })
     await setDoc(doc(db, 'users/emp2'), { displayName: '佐藤', email: 'e2@example.com', role: 'employee', createdAt: t('2026-10-01') })
+    const retired = { retiredAt: t('2026-10-20'), retiredBy: 'admin', retireDate: '2026-10-20', retireReason: '' }
+    await setDoc(doc(db, 'users/gone'), { displayName: '退職', email: 'g@example.com', role: 'employee', createdAt: t('2026-10-01'), ...retired })
+    await setDoc(doc(db, 'users/oldadmin'), { displayName: '元管理者', email: 'o@example.com', role: 'admin', createdAt: t('2026-10-01'), ...retired })
+    await setDoc(doc(db, 'attendancePunches/g1'), { userId: 'gone', workDate: '2026-10-14', month: '2026-10', locationStatus: 'acquired', corrected: false, receivedAt: t('2026-10-14T00:00:00Z'), kind: 'in', punchedAt: t('2026-10-14T00:00:00Z') })
     const punch = { userId: 'emp', workDate: '2026-10-14', month: '2026-10', locationStatus: 'acquired', corrected: false, receivedAt: t('2026-10-14T00:00:00Z') }
     await setDoc(doc(db, 'attendancePunches/p1'), { ...punch, kind: 'in', punchedAt: t('2026-10-14T00:00:00Z') })
     await setDoc(doc(db, 'attendancePunches/p2'), { ...punch, kind: 'out', punchedAt: t('2026-10-14T09:00:00Z') })
@@ -189,5 +193,39 @@ describe('管理者：見積書', () => {
     await assertSucceeds(setDoc(doc(admin(), 'estimates/q3'), { number: '2026-0003', status: 'draft', title: 'x' }))
     await assertFails(deleteDoc(doc(admin(), 'estimates/q1')))
     await assertSucceeds(deleteDoc(doc(admin(), 'estimates/q2')))
+  })
+})
+
+describe('退職', () => {
+  const punch = (userId) => ({ userId, workDate: '2026-10-21', month: '2026-10', kind: 'in', punchedAt: t('2026-10-21'), receivedAt: serverTimestamp(), corrected: false, locationStatus: 'pending' })
+  test('退職した人は自分のデータを読み書きできない（自分の users だけ読める）', async () => {
+    const g = as('gone')
+    await assertSucceeds(getDoc(doc(g, 'users/gone')))
+    await assertFails(getDoc(doc(g, 'attendancePunches/g1')))
+    await assertFails(setDoc(doc(g, 'attendancePunches/new'), punch('gone')))
+    await assertFails(updateDoc(doc(g, 'users/gone'), { displayName: 'x' }))
+    await assertFails(updateDoc(doc(g, 'users/gone'), { retiredAt: deleteField(), retiredBy: deleteField(), retireDate: deleteField(), retireReason: deleteField() }))
+    await assertFails(getDoc(doc(g, 'settings/company')))
+  })
+  test('users/{uid} がないアカウントは何もできない', async () => {
+    await assertFails(setDoc(doc(as('nodoc'), 'attendancePunches/new'), punch('nodoc')))
+  })
+  test('退職した管理者は管理者の操作ができない', async () => {
+    const o = as('oldadmin')
+    await assertFails(getDoc(doc(o, 'attendancePunches/p1')))
+    await assertFails(updateDoc(doc(o, 'dailyReports/r1'), { status: 'approved', approvedBy: 'oldadmin', approvedAt: serverTimestamp() }))
+  })
+  test('管理者は退職にでき、取り消せる。自分は退職にできない', async () => {
+    const r = { retiredAt: serverTimestamp(), retiredBy: 'admin', retireDate: '2026-10-31', retireReason: '自己都合' }
+    await assertSucceeds(updateDoc(doc(admin(), 'users/emp'), r))
+    await assertFails(setDoc(doc(emp(), 'attendancePunches/new'), punch('emp')))
+    await assertSucceeds(updateDoc(doc(admin(), 'users/gone'), { retiredAt: deleteField(), retiredBy: deleteField(), retireDate: deleteField(), retireReason: deleteField() }))
+    await assertSucceeds(setDoc(doc(as('gone'), 'attendancePunches/new2'), punch('gone')))
+    await assertFails(updateDoc(doc(admin(), 'users/admin'), { ...r, retiredBy: 'admin' }))
+    await assertFails(updateDoc(doc(admin(), 'users/emp2'), { ...r, retiredBy: 'someone' }))
+    await assertFails(updateDoc(doc(admin(), 'users/emp2'), { ...r, retireDate: '10/31' }))
+  })
+  test('退職した人の過去の打刻は管理者が読める', async () => {
+    await assertSucceeds(getDoc(doc(admin(), 'attendancePunches/g1')))
   })
 })

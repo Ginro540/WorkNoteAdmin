@@ -7,16 +7,19 @@ import { Loading, MonthSelect, PageTitle } from '../ui/common'
 
 /** 全員の月の集計 */
 export function AttendancePage() {
-  const { currentMonth, users, period } = useData()
+  const { currentMonth, users, activeUsers, period } = useData()
   const [params, setParams] = useSearchParams()
   const month = params.get('month') ?? currentMonth
   const navigate = useNavigate()
   const { users: months, loading } = useMonthAttendance(month)
   const range = period.dateRange(month)
 
-  // 打刻がなくても従業員は全員出す。users にいない人（削除された人など）の打刻も出す
-  const ids = [...new Set([...users.map((u) => u.id), ...months.keys()])]
-  const nameOf = (id: string) => users.find((u) => u.id === id)?.displayName || '（不明なユーザー）'
+  // 打刻がなくても在籍している人は全員出す。退職した人や users にいない人は、その月に打刻があれば出す
+  const ids = [...new Set([...activeUsers.map((u) => u.id), ...months.keys()])]
+  const nameOf = (id: string) => {
+    const u = users.find((x) => x.id === id)
+    return u ? `${u.displayName}${u.retiredAt ? '（退職）' : ''}` : '（不明なユーザー）'
+  }
 
   return (
     <Stack p="md">

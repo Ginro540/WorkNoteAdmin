@@ -32,6 +32,12 @@ export interface AppUser {
   email: string
   role: Role
   createdAt: Date | null
+  /** 退職にした日時。あるあいだは従業員としての読み書きがルールで止まる */
+  retiredAt: Date | null
+  retiredBy: string | null
+  /** 退職日（YYYY-MM-DD、表示用） */
+  retireDate: string | null
+  retireReason: string
 }
 
 export const roleLabel = (role: Role) => (role === 'admin' ? '管理者' : '従業員')
@@ -43,6 +49,10 @@ export function parseUser(id: string, d: DocumentData): AppUser {
     email: str(d.email),
     role: d.role === 'admin' ? 'admin' : 'employee',
     createdAt: toDate(d.createdAt),
+    retiredAt: toDate(d.retiredAt),
+    retiredBy: optStr(d.retiredBy),
+    retireDate: optStr(d.retireDate),
+    retireReason: str(d.retireReason),
   }
 }
 

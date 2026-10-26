@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:emulator": "VITE_EMULATOR=1 vite --port 5174",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",

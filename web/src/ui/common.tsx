@@ -147,7 +147,12 @@ export function MonthSelect({ value, onChange, includeAll = false }: { value: st
 
 export function UserSelect({ value, onChange, allLabel = 'すべての人' }: { value: string; onChange: (v: string) => void; allLabel?: string | null }) {
   const { users } = useData()
-  const data = [...(allLabel ? [{ value: 'all', label: allLabel }] : []), ...users.map((u) => ({ value: u.id, label: u.displayName || u.email }))]
+  // 退職した人は後ろに「（退職）」を付けて出す（過去の月を見るため）
+  const ordered = [...users.filter((u) => !u.retiredAt), ...users.filter((u) => u.retiredAt)]
+  const data = [
+    ...(allLabel ? [{ value: 'all', label: allLabel }] : []),
+    ...ordered.map((u) => ({ value: u.id, label: `${u.displayName || u.email}${u.retiredAt ? '（退職）' : ''}` })),
+  ]
   return <Select aria-label="従業員" data={data} value={value} onChange={(v) => v && onChange(v)} allowDeselect={false} searchable w={170} />
 }
 

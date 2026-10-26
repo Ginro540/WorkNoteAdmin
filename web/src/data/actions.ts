@@ -23,7 +23,7 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { auth, db, firebaseConfig } from '../firebase'
+import { auth, connectAuthIfEmulator, db, firebaseConfig } from '../firebase'
 import type { ClosingPeriod } from '../core/closingPeriod'
 import type { PunchKind } from '../core/attendance'
 import type { AttendanceCorrection, AttendancePunch, DailyReport, Estimate, Expense, Role } from './models'
@@ -231,6 +231,7 @@ export async function createEmployee(email: string, password: string, displayNam
   const secondary = initializeApp(firebaseConfig, `create-user-${Date.now()}`)
   try {
     const secondaryAuth = getAuth(secondary)
+    connectAuthIfEmulator(secondaryAuth)
     await setPersistence(secondaryAuth, inMemoryPersistence)
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password)
     await updateProfile(cred.user, { displayName }).catch(() => undefined)
@@ -253,6 +254,16 @@ export function writeUserProfile(uid: string, email: string, displayName: string
 
 export function updateUser(uid: string, fields: { displayName?: string; role?: Role }) {
   return updateDoc(doc(db, 'users', uid), fields)
+}
+
+/** 退職にする（ログイン用のアカウントは残るが、ルールで読み書きが止まる） */
+export function retireUser(uid: string, adminUid: string, retireDate: string, reason: string) {
+  return updateDoc(doc(db, 'users', uid), { retiredAt: serverTimestamp(), retiredBy: adminUid, retireDate, retireReason: reason })
+}
+
+/** 退職を取り消す */
+export function unretireUser(uid: string) {
+  return updateDoc(doc(db, 'users', uid), { retiredAt: deleteField(), retiredBy: deleteField(), retireDate: deleteField(), retireReason: deleteField() })
 }
 
 export function sendPasswordReset(email: string) {

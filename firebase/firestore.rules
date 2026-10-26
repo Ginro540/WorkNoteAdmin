@@ -4,8 +4,9 @@ rules_version = '2';
 // - 従業員は userId が自分のデータだけを読み書きできる
 // - 管理者（users/{uid}.role == 'admin'）は全員分を読める
 // - settings と sites は全員が読めて、管理者だけが変更できる
-// - 「管理者アプリ」と書いた allow は管理者の書き込み（承認・差し戻し・打刻の修正・従業員の登録・見積書）。
+// - 「管理者アプリ」と書いた allow は管理者の書き込み（承認・差し戻し・打刻の修正・従業員の登録・退職・見積書）。
 //   従業員の allow はそのまま残し、管理者の条件を別の allow として足している
+// - 退職にした人（users/{uid}.retiredAt がある人）は、自分の users/{uid} を読むこと以外できない
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -15,11 +16,18 @@ service cloud.firestore {
 
     function isAdmin() {
       return signedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && isActive();
+    }
+
+    // 管理者アプリ：退職にした人（users/{uid}.retiredAt がある人）と、users/{uid} がない人は読み書きできない
+    function isActive() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && !('retiredAt' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
     }
 
     function isOwner(userId) {
-      return signedIn() && request.auth.uid == userId;
+      return signedIn() && request.auth.uid == userId && isActive();
     }
 
     // 作成時：userId が自分で、指定したフィールドだけ
@@ -39,8 +47,8 @@ service cloud.firestore {
     // ユーザー
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      // アカウントは会社が発行する（アプリからは作れない）。自分の role・email は変更できない
-      allow update: if isOwner(uid) && !changedKeys().hasAny(['role', 'email', 'createdAt']);
+      // アカウントは会社が発行する（アプリからは作れない）。自分の role・email・退職は変更できない
+      allow update: if isOwner(uid) && !changedKeys().hasAny(['role', 'email', 'createdAt', 'retiredAt', 'retiredBy', 'retireDate', 'retireReason']);
       allow create, delete: if false;
 
       // 管理者アプリ：従業員の登録（アカウントは管理者アプリが Authentication で作る）
@@ -57,6 +65,24 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.role in ['employee', 'admin']
         && (uid != request.auth.uid || !changedKeys().hasAny(['role']));
+
+      // 管理者アプリ：退職にする・取り消す。自分は退職にできない
+      allow update: if isAdmin()
+        && uid != request.auth.uid
+        && changedKeys().hasOnly(['retiredAt', 'retiredBy', 'retireDate', 'retireReason'])
+        && (
+          (!('retiredAt' in resource.data)
+            && request.resource.data.retiredAt == request.time
+            && request.resource.data.retiredBy == request.auth.uid
+            && request.resource.data.retireDate is string
+            && request.resource.data.retireDate.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+            && request.resource.data.retireReason is string)
+          || ('retiredAt' in resource.data
+            && !request.resource.data.keys().hasAny(['retiredAt', 'retiredBy', 'retireDate', 'retireReason']))
+        );
+
+      // 管理者アプリ：退職した本人も自分の users/{uid} は読める（従業員アプリが「使えません」と出せるように）
+      allow read: if signedIn() && request.auth.uid == uid;
     }
 
     // 打刻：本人は追加だけ。時刻は変更・削除できない（あとから位置を追加することだけはできる）
@@ -270,13 +296,13 @@ service cloud.firestore {
 
     // 勤務先の一覧
     match /sites/{siteId} {
-      allow read: if signedIn();
+      allow read: if signedIn() && isActive();
       allow write: if isAdmin();
     }
 
     // 日報の項目・経費の区分・会社の設定・休日カレンダー
     match /settings/{docId} {
-      allow read: if signedIn();
+      allow read: if signedIn() && isActive();
       allow write: if isAdmin();
     }
 
