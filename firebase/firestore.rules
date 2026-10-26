@@ -221,6 +221,68 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
+    // 管理者アプリ：休暇（1日1件。docs/従業員アプリ指示書_休暇.md）。本人は申請と申請中の取り消し、管理者は承認・却下・直接登録・承認済みの取り消し
+    match /leaveRequests/{leaveId} {
+      function validLeave(d) {
+        return d.userId is string
+          && d.date is string && d.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          && d.month is string && d.month.matches('[0-9]{4}-[0-9]{2}')
+          && d.kind in ['paid', 'paidAm', 'paidPm', 'special', 'absence']
+          && d.reason is string
+          // 有給は理由がなくてよい。特別休暇・欠勤は理由が必須
+          && (d.kind in ['paid', 'paidAm', 'paidPm'] || d.reason.size() > 0)
+          && d.groupId is string
+          && d.createdAt is timestamp;
+      }
+
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+
+      // 本人：申請
+      allow create: if createsOwn()
+        && request.resource.data.keys().hasOnly(['userId', 'date', 'month', 'kind', 'reason', 'groupId', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && validLeave(request.resource.data);
+
+      // 本人：申請中の取り消し
+      allow update: if isOwner(resource.data.userId)
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'cancelled'
+        && changedKeys().hasOnly(['status', 'cancelledAt'])
+        && request.resource.data.cancelledAt is timestamp;
+
+      // 管理者：承認・却下（申請中だけ。却下は理由が必須）
+      allow update: if isAdmin()
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['approved', 'rejected']
+        && changedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt', 'rejectReason'])
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && (request.resource.data.status == 'approved'
+          || (request.resource.data.rejectReason is string && request.resource.data.rejectReason.size() > 0));
+
+      // 管理者：承認済みの取り消し（理由が必須。記録は残す）
+      allow update: if isAdmin()
+        && resource.data.status == 'approved'
+        && request.resource.data.status == 'cancelled'
+        && changedKeys().hasOnly(['status', 'cancelledAt', 'cancelledBy', 'cancelReason'])
+        && request.resource.data.cancelledAt == request.time
+        && request.resource.data.cancelledBy == request.auth.uid
+        && request.resource.data.cancelReason is string
+        && request.resource.data.cancelReason.size() > 0;
+
+      // 管理者：承認済みの休暇を直接登録
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['userId', 'date', 'month', 'kind', 'reason', 'groupId', 'status', 'createdAt', 'createdBy', 'reviewedBy', 'reviewedAt'])
+        && request.resource.data.status == 'approved'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && validLeave(request.resource.data);
+
+      allow delete: if false;
+    }
+
     // 日報：承認前（下書き・提出済み）なら本人が更新できる
     match /dailyReports/{reportId} {
       allow read: if isOwner(resource.data.userId) || isAdmin();

@@ -22,6 +22,8 @@ import {
 import { dayStatusLabel, punchKindLabel, type PunchKind } from '../core/attendance'
 import { dateFromDayKey, dateTimeLabel, dayKey, durationLabel, jstParts, makeDate, monthLabel, shortDayLabelFromKey, timeLabel, weekday } from '../core/workCalendar'
 import { Empty, Field, Loading, MonthSelect, PageTitle, PendingBadge, StatusBadge, UserSelect, runWrite } from '../ui/common'
+import { LeaveBadge, RegisterLeaveModal } from './LeavesPage'
+import { leaveKindLabel, leaveStatusLabel } from '../data/models'
 
 type FlagFilter = 'all' | 'missingPunch' | 'corrected' | 'clockSkew' | 'noLocation' | 'pendingCorrection'
 
@@ -81,6 +83,17 @@ export function AttendanceUserPage() {
           </Field>
           <Field label="日報未提出">
             <Text fw={700}>{data.missingReports}日</Text>
+          </Field>
+          <Field label="有給">
+            <Text fw={700}>{data.totals.paidLeaveDays}日</Text>
+          </Field>
+          <Field label="特別休暇">
+            <Text fw={700}>{data.totals.specialLeaveDays}日</Text>
+          </Field>
+          <Field label="欠勤">
+            <Text fw={700} c={data.totals.absenceDays ? 'orange' : undefined}>
+              {data.totals.absenceDays}日
+            </Text>
           </Field>
         </Group>
       )}
@@ -144,8 +157,15 @@ export function AttendanceUserPage() {
                       {s.overtimeMinutes ? durationLabel(s.overtimeMinutes) : '—'}
                     </Table.Td>
                     <Table.Td c={s.status === 'missingPunch' ? 'red' : s.status === 'off' ? 'dimmed' : undefined}>
-                      {s.status === 'off' && holidayOn(r.workDate) ? holidayOn(r.workDate)!.name : dayStatusLabel[s.status]}
+                      {s.status === 'off' && r.leaves.length > 0 ? null : s.status === 'off' && holidayOn(r.workDate) ? holidayOn(r.workDate)!.name : dayStatusLabel[s.status]}
                       {s.sessions.length > 1 ? `（${s.sessions.length}回）` : ''}
+                      {r.leaves.length > 0 && (
+                        <Group gap={4} mt={s.status === 'off' ? 0 : 2}>
+                          {r.leaves.map((l) => (
+                            <LeaveBadge key={l.id} leave={l} />
+                          ))}
+                        </Group>
+                      )}
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} wrap="nowrap">
@@ -202,6 +222,7 @@ function ReportMemo({ report, hasWork }: { report: DailyReport | undefined; hasW
 function DayDetail({ userId, workDate, row, report }: { userId: string; workDate: string; row: DayRow | undefined; report: DailyReport | undefined }) {
   const { userName, holidayOn } = useData()
   const [editing, setEditing] = useState<{ mode: 'edit' | 'add' | 'delete' | 'break'; punch?: AttendancePunch } | null>(null)
+  const [registeringLeave, setRegisteringLeave] = useState(false)
   const punches = row?.punches ?? []
   const s = row?.summary
   const holiday = holidayOn(workDate)
@@ -228,7 +249,25 @@ function DayDetail({ userId, workDate, row, report }: { userId: string; workDate
         <Button size="xs" variant="light" onClick={() => setEditing({ mode: 'break' })}>
           休憩を修正
         </Button>
+        {!row?.leaves.length && (
+          <Button size="xs" variant="light" color="cyan" onClick={() => setRegisteringLeave(true)}>
+            休暇を登録
+          </Button>
+        )}
       </Group>
+      {row?.leaves.map((l) => (
+        <Alert key={l.id} color={l.status === 'approved' ? 'cyan' : 'blue'} variant="light" title={`${leaveKindLabel[l.kind]}（${leaveStatusLabel[l.status]}）`}>
+          <Text size="sm">{l.reason || '理由なし'}</Text>
+          <Text size="xs" c="dimmed">
+            {l.createdBy ? `管理者（${userName(l.createdBy)}）が登録` : `${dateTimeLabel(l.createdAt)} に申請`}
+            {l.reviewedBy && !l.createdBy && `・${userName(l.reviewedBy)}が承認`}
+          </Text>
+          <Text size="xs" mt={4}>
+            <Link to={`/leaves?status=${l.status}&month=${l.month}&user=${userId}`}>休暇の画面で開く</Link>
+          </Text>
+        </Alert>
+      ))}
+      <RegisterLeaveModal opened={registeringLeave} onClose={() => setRegisteringLeave(false)} userId={userId} date={workDate} />
 
       {punches.length === 0 ? (
         <Text c="dimmed" size="sm">

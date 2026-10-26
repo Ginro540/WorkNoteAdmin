@@ -26,7 +26,7 @@ import {
 import { auth, connectAuthIfEmulator, db, firebaseConfig } from '../firebase'
 import type { ClosingPeriod } from '../core/closingPeriod'
 import type { PunchKind } from '../core/attendance'
-import type { AttendanceCorrection, AttendancePunch, DailyReport, Estimate, Expense, Role } from './models'
+import type { AttendanceCorrection, AttendancePunch, DailyReport, Estimate, Expense, LeaveKind, LeaveRequest, Role } from './models'
 
 const ts = (d: Date) => Timestamp.fromDate(d)
 
@@ -77,6 +77,51 @@ export function returnExpense(expense: Expense, reason: string, adminUid: string
     reviewedBy: adminUid,
     reviewedAt: serverTimestamp(),
   })
+}
+
+// MARK: - 休暇
+
+export function approveLeaves(leaves: LeaveRequest[], adminUid: string) {
+  const batch = writeBatch(db)
+  for (const l of leaves) batch.update(doc(db, 'leaveRequests', l.id), { status: 'approved', reviewedBy: adminUid, reviewedAt: serverTimestamp() })
+  return batch.commit()
+}
+
+export function rejectLeaves(leaves: LeaveRequest[], reason: string, adminUid: string) {
+  const batch = writeBatch(db)
+  for (const l of leaves) batch.update(doc(db, 'leaveRequests', l.id), { status: 'rejected', rejectReason: reason, reviewedBy: adminUid, reviewedAt: serverTimestamp() })
+  return batch.commit()
+}
+
+/** 管理者が承認済みの休暇を直接登録する（電話で連絡を受けたときなど）。1日1件で、同じ groupId を付ける */
+export function registerLeaves(userId: string, dates: string[], kind: LeaveKind, reason: string, monthOf: (date: string) => string, adminUid: string) {
+  const batch = writeBatch(db)
+  const refs = dates.map(() => doc(collection(db, 'leaveRequests')))
+  const groupId = refs[0].id
+  dates.forEach((date, i) =>
+    batch.set(refs[i], {
+      userId,
+      date,
+      month: monthOf(date),
+      kind,
+      reason,
+      groupId,
+      status: 'approved',
+      createdAt: serverTimestamp(),
+      createdBy: adminUid,
+      reviewedBy: adminUid,
+      reviewedAt: serverTimestamp(),
+    }),
+  )
+  return batch.commit()
+}
+
+/** 承認済みの休暇を取り消す（本人から連絡があったときなど。記録は残す） */
+export function cancelLeavesByAdmin(leaves: LeaveRequest[], reason: string, adminUid: string) {
+  const batch = writeBatch(db)
+  for (const l of leaves)
+    batch.update(doc(db, 'leaveRequests', l.id), { status: 'cancelled', cancelledAt: serverTimestamp(), cancelledBy: adminUid, cancelReason: reason })
+  return batch.commit()
 }
 
 // MARK: - 打刻の修正申請

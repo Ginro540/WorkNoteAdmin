@@ -11,6 +11,8 @@ import { ExpensesPage } from './pages/ExpensesPage'
 import { CorrectionsPage } from './pages/CorrectionsPage'
 import { AttendancePage } from './pages/AttendancePage'
 import { AttendanceUserPage } from './pages/AttendanceUserPage'
+import { NowPage } from './pages/NowPage'
+import { LeavesPage } from './pages/LeavesPage'
 import { EstimatesPage } from './pages/EstimatesPage'
 import { EstimatePrintPage } from './pages/EstimatePrintPage'
 import { UsersPage } from './pages/master/UsersPage'
@@ -64,6 +66,8 @@ function Gate() {
         <Route path="/estimates/:id/print" element={<EstimatePrintPage />} />
         <Route element={<Layout />}>
           <Route index element={<HomePage />} />
+          <Route path="now" element={<NowPage />} />
+          <Route path="leaves" element={<LeavesPage />} />
           <Route path="reports/:id?" element={<ReportsPage />} />
           <Route path="expenses/:id?" element={<ExpensesPage />} />
           <Route path="corrections/:id?" element={<CorrectionsPage />} />

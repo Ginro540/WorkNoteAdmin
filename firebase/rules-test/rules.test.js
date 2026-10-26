@@ -42,6 +42,9 @@ beforeEach(async () => {
     const expense = { userId: 'emp', usedOn: '2026-10-14', month: '2026-10', amount: 1200, vendor: 'ENEOS', categoryId: 'fuel', invoiceNumber: '', memo: '', ocrText: '', createdAt: t('2026-10-14') }
     await setDoc(doc(db, 'expenses/e1'), { ...expense, status: 'submitted' })
     await setDoc(doc(db, 'expenses/e2'), { ...expense, status: 'draft' })
+    const leave = { userId: 'emp', date: '2026-11-04', month: '2026-11', kind: 'paid', reason: '', groupId: 'l1', createdAt: t('2026-10-25') }
+    await setDoc(doc(db, 'leaveRequests/l1'), { ...leave, status: 'pending' })
+    await setDoc(doc(db, 'leaveRequests/l2'), { ...leave, groupId: 'l2', status: 'approved', reviewedBy: 'admin', reviewedAt: t('2026-10-26') })
     await setDoc(doc(db, 'estimates/q1'), { number: '2026-0001', status: 'issued', title: '工事' })
     await setDoc(doc(db, 'estimates/q2'), { number: '2026-0002', status: 'draft', title: '工事' })
   })
@@ -227,5 +230,49 @@ describe('退職', () => {
   })
   test('退職した人の過去の打刻は管理者が読める', async () => {
     await assertSucceeds(getDoc(doc(admin(), 'attendancePunches/g1')))
+  })
+})
+
+describe('休暇', () => {
+  const req = (userId, extra = {}) => ({ userId, date: '2026-11-10', month: '2026-11', kind: 'paid', reason: '', groupId: 'g', status: 'pending', createdAt: Timestamp.now(), ...extra })
+  test('本人は申請できる（有給は理由なしでよい、欠勤は理由が必須）', async () => {
+    await assertSucceeds(setDoc(doc(emp(), 'leaveRequests/n1'), req('emp')))
+    await assertFails(setDoc(doc(emp(), 'leaveRequests/n2'), req('emp', { kind: 'absence' })))
+    await assertSucceeds(setDoc(doc(emp(), 'leaveRequests/n3'), req('emp', { kind: 'absence', reason: '体調不良' })))
+  })
+  test('本人は他人の分・承認済み・知らない種類・余計なフィールドを作れない', async () => {
+    await assertFails(setDoc(doc(emp(), 'leaveRequests/n1'), req('emp2')))
+    await assertFails(setDoc(doc(emp(), 'leaveRequests/n2'), req('emp', { status: 'approved' })))
+    await assertFails(setDoc(doc(emp(), 'leaveRequests/n3'), req('emp', { kind: 'vacation' })))
+    await assertFails(setDoc(doc(emp(), 'leaveRequests/n4'), req('emp', { reviewedBy: 'emp' })))
+    await assertFails(setDoc(doc(emp(), 'leaveRequests/n5'), req('emp', { date: '11/10' })))
+  })
+  test('本人は申請中だけ取り消せる。承認・削除はできない', async () => {
+    await assertFails(updateDoc(doc(emp(), 'leaveRequests/l1'), { status: 'approved', reviewedBy: 'emp', reviewedAt: serverTimestamp() }))
+    await assertFails(updateDoc(doc(emp(), 'leaveRequests/l2'), { status: 'cancelled', cancelledAt: Timestamp.now() }))
+    await assertSucceeds(updateDoc(doc(emp(), 'leaveRequests/l1'), { status: 'cancelled', cancelledAt: Timestamp.now() }))
+    await assertFails(deleteDoc(doc(emp(), 'leaveRequests/l1')))
+  })
+  test('他の人の休暇は読めない', async () => {
+    await assertSucceeds(getDoc(doc(emp(), 'leaveRequests/l1')))
+    await assertFails(getDoc(doc(as('emp2'), 'leaveRequests/l1')))
+  })
+  test('管理者は承認・却下（理由が必須）できる', async () => {
+    await assertFails(updateDoc(doc(admin(), 'leaveRequests/l1'), { status: 'rejected', reviewedBy: 'admin', reviewedAt: serverTimestamp() }))
+    await assertSucceeds(updateDoc(doc(admin(), 'leaveRequests/l1'), { status: 'rejected', rejectReason: '繁忙期のため', reviewedBy: 'admin', reviewedAt: serverTimestamp() }))
+    await assertFails(updateDoc(doc(admin(), 'leaveRequests/l1'), { status: 'approved', reviewedBy: 'admin', reviewedAt: serverTimestamp() }))
+  })
+  test('管理者は承認済みを理由付きで取り消せる', async () => {
+    await assertFails(updateDoc(doc(admin(), 'leaveRequests/l2'), { status: 'cancelled', cancelledAt: serverTimestamp(), cancelledBy: 'admin', cancelReason: '' }))
+    await assertSucceeds(updateDoc(doc(admin(), 'leaveRequests/l2'), { status: 'cancelled', cancelledAt: serverTimestamp(), cancelledBy: 'admin', cancelReason: '出勤したため' }))
+  })
+  test('管理者は承認済みの休暇を直接登録できる', async () => {
+    const r = req('emp', { status: 'approved', createdAt: serverTimestamp(), createdBy: 'admin', reviewedBy: 'admin', reviewedAt: serverTimestamp() })
+    await assertSucceeds(setDoc(doc(admin(), 'leaveRequests/a1'), r))
+    await assertFails(setDoc(doc(admin(), 'leaveRequests/a2'), { ...r, createdBy: 'emp' }))
+    await assertFails(setDoc(doc(emp(), 'leaveRequests/a3'), r))
+  })
+  test('退職した人は申請できない', async () => {
+    await assertFails(setDoc(doc(as('gone'), 'leaveRequests/n1'), req('gone')))
   })
 })

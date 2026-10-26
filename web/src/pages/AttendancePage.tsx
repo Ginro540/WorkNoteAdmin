@@ -32,7 +32,7 @@ export function AttendancePage() {
       {loading ? (
         <Loading />
       ) : (
-        <Table.ScrollContainer minWidth={760}>
+        <Table.ScrollContainer minWidth={1040}>
           <Table highlightOnHover className="att-table">
             <Table.Thead>
               <Table.Tr>
@@ -42,6 +42,10 @@ export function AttendancePage() {
                 <Table.Th ta="right">時間外</Table.Th>
                 <Table.Th ta="right">退勤漏れ</Table.Th>
                 <Table.Th ta="right">修正申請中</Table.Th>
+                <Table.Th ta="right">有給</Table.Th>
+                <Table.Th ta="right">特別休暇</Table.Th>
+                <Table.Th ta="right">欠勤</Table.Th>
+                <Table.Th ta="right">休暇申請中</Table.Th>
                 <Table.Th ta="right">日報未提出</Table.Th>
               </Table.Tr>
             </Table.Thead>
@@ -69,6 +73,18 @@ export function AttendancePage() {
                       <Table.Td ta="right" className="num" c={m?.pendingCorrections ? 'blue' : undefined}>
                         {m?.pendingCorrections ?? 0}
                       </Table.Td>
+                      <Table.Td ta="right" className="num">
+                        {m?.totals.paidLeaveDays ?? 0}
+                      </Table.Td>
+                      <Table.Td ta="right" className="num">
+                        {m?.totals.specialLeaveDays ?? 0}
+                      </Table.Td>
+                      <Table.Td ta="right" className="num" c={m?.totals.absenceDays ? 'orange' : undefined}>
+                        {m?.totals.absenceDays ?? 0}
+                      </Table.Td>
+                      <Table.Td ta="right" className="num" c={m?.pendingLeaves ? 'blue' : undefined}>
+                        {m?.pendingLeaves ?? 0}
+                      </Table.Td>
                       <Table.Td ta="right" className="num" c={warn(m?.missingReports ?? 0)}>
                         {m?.missingReports ?? 0}
                       </Table.Td>
@@ -80,7 +96,7 @@ export function AttendancePage() {
         </Table.ScrollContainer>
       )}
       <Text size="xs" c="dimmed">
-        実働・休憩の計算は従業員アプリと同じです（休憩のルールは「会社の設定」）。日報未提出は、打刻がある前日までの日のうち、提出済み・承認済みの日報がない日の数です。
+        実働・休憩の計算は従業員アプリと同じです（休憩のルールは「会社の設定」）。日報未提出は、打刻がある前日までの日のうち、提出済み・承認済みの日報がない日の数です（全日の休暇の日は数えません）。休暇の日数は承認済みのものだけで、半休は0.5日です。
       </Text>
     </Stack>
   )

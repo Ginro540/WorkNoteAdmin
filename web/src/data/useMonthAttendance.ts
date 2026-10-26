@@ -3,8 +3,8 @@ import { collection, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useQuery } from './firestore'
 import { useData } from './session'
-import { dayRow, groupByWorkDate, monthTotals, openWorkDate, type DayRow, type MonthTotals } from './attendanceDays'
-import { parseCorrection, parsePunch, parseReport, type AttendanceCorrection, type AttendancePunch, type DailyReport } from './models'
+import { dayRow, groupByWorkDate, isFullDayLeave, monthTotals, openWorkDate, type DayRow, type MonthTotals } from './attendanceDays'
+import { parseCorrection, parseLeave, parsePunch, parseReport, type AttendanceCorrection, type AttendancePunch, type DailyReport, type LeaveRequest } from './models'
 
 export interface UserMonth {
   userId: string
@@ -12,6 +12,7 @@ export interface UserMonth {
   rows: DayRow[]
   totals: MonthTotals
   pendingCorrections: number
+  pendingLeaves: number
   /** 打刻がある日に、提出済み・承認済みの日報がない日の数 */
   missingReports: number
   reportsByDate: Map<string, DailyReport>
@@ -25,6 +26,7 @@ export function useMonthAttendance(month: string, userId?: string) {
   const punches = useQuery(query(collection(db, 'attendancePunches'), ...byUser()), `punches-${key}`, parsePunch)
   const corrections = useQuery(query(collection(db, 'attendanceCorrections'), ...byUser()), `corrections-${key}`, parseCorrection)
   const reports = useQuery(query(collection(db, 'dailyReports'), ...byUser()), `reports-${key}`, parseReport)
+  const leaves = useQuery(query(collection(db, 'leaveRequests'), ...byUser()), `leaves-${key}`, parseLeave)
 
   const users = useMemo(() => {
     const days = period.dayKeys(month)
@@ -35,32 +37,37 @@ export function useMonthAttendance(month: string, userId?: string) {
     const reportsByUser = new Map<string, DailyReport[]>()
     for (const r of reports.items) reportsByUser.set(r.userId, [...(reportsByUser.get(r.userId) ?? []), r])
 
-    const ids = new Set([...punchesByUser.keys(), ...correctionsByUser.keys(), ...(userId ? [userId] : [])])
+    const leavesByUser = new Map<string, LeaveRequest[]>()
+    for (const l of leaves.items) leavesByUser.set(l.userId, [...(leavesByUser.get(l.userId) ?? []), l])
+
+    const ids = new Set([...punchesByUser.keys(), ...correctionsByUser.keys(), ...leavesByUser.keys(), ...(userId ? [userId] : [])])
     const result = new Map<string, UserMonth>()
     for (const uid of ids) {
       const list = punchesByUser.get(uid) ?? []
       const cs = correctionsByUser.get(uid) ?? []
+      const ls = leavesByUser.get(uid) ?? []
       const open = openWorkDate(list, today)
       const grouped = groupByWorkDate(list)
       // 締め日を変えたあとの古いデータなど、月の範囲の外の勤務日も落とさない
       const allDays = [...new Set([...days, ...grouped.keys()])].sort()
-      const rows = allDays.map((d) => dayRow(d, grouped.get(d) ?? [], cs, company.breakRules, today, open))
+      const rows = allDays.map((d) => dayRow(d, grouped.get(d) ?? [], cs, company.breakRules, today, open, ls))
       const reportsByDate = new Map((reportsByUser.get(uid) ?? []).map((r) => [r.date, r]))
       result.set(uid, {
         userId: uid,
         rows,
         totals: monthTotals(rows),
         pendingCorrections: cs.filter((c) => c.status === 'pending').length,
-        missingReports: rows.filter((r) => r.summary.status !== 'off' && r.workDate < today && !['submitted', 'approved'].includes(reportsByDate.get(r.workDate)?.status ?? '')).length,
+        pendingLeaves: ls.filter((l) => l.status === 'pending').length,
+        missingReports: rows.filter((r) => r.summary.status !== 'off' && !isFullDayLeave(r) && r.workDate < today && !['submitted', 'approved'].includes(reportsByDate.get(r.workDate)?.status ?? '')).length,
         reportsByDate,
       })
     }
     return result
-  }, [punches.items, corrections.items, reports.items, period, month, company.breakRules, today, userId])
+  }, [punches.items, corrections.items, reports.items, leaves.items, period, month, company.breakRules, today, userId])
 
   return {
     users,
-    loading: punches.loading || corrections.loading || reports.loading,
+    loading: punches.loading || corrections.loading || reports.loading || leaves.loading,
     pendingPunchIds: punches.pending,
     corrections: corrections.items,
   }
