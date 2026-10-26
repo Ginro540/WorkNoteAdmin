@@ -9,7 +9,7 @@
   "hosting": {
     "public": "hosting",
     "ignore": ["firebase.json", "**/.*"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "rewrites": [{ "source": "**/!(*.*)", "destination": "/index.html" }],
     "headers": [
       { "source": "/assets/**", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
       { "source": "**/*.@(html|webmanifest)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
